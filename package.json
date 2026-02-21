@@ -1,0 +1,38 @@
+{
+  "name": "wine",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Static MapLibre + NASA GIBS map with regional masking overlays",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc -b && vite build",
+    "preview": "vite preview",
+    "download-tiles": "tsx scripts/download-tiles.ts",
+    "refresh-borders": "tsx scripts/refresh-borders.ts"
+  },
+  "keywords": [
+    "maplibre",
+    "vite",
+    "nasa-gibs"
+  ],
+  "author": "",
+  "license": "MIT",
+  "type": "module",
+  "dependencies": {
+    "earcut": "^3.0.2",
+    "maplibre-gl": "^5.18.0",
+    "react": "^19.2.4",
+    "react-dom": "^19.2.4"
+  },
+  "devDependencies": {
+    "@types/earcut": "^3.0.0",
+    "@types/geojson": "^7946.0.16",
+    "@types/node": "^25.3.0",
+    "@types/react": "^19.2.14",
+    "@types/react-dom": "^19.2.3",
+    "@vitejs/plugin-react": "^5.1.4",
+    "tsx": "^4.21.0",
+    "typescript": "^5.9.3",
+    "vite": "^7.3.1"
+  }
+}
