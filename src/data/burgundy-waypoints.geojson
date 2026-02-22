@@ -1,0 +1,54 @@
+{
+  "type": "FeatureCollection",
+  "features": [
+    {
+      "type": "Feature",
+      "id": "beaune",
+      "properties": {
+        "name": "Beaune",
+        "parent_slug": "burgundy"
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [4.8396, 47.0240]
+      }
+    },
+    {
+      "type": "Feature",
+      "id": "pommard",
+      "properties": {
+        "name": "Pommard",
+        "parent_slug": "burgundy"
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [4.7887, 47.0097]
+      }
+    },
+    {
+      "type": "Feature",
+      "id": "nuits-saint-georges",
+      "properties": {
+        "name": "Nuits-Saint-Georges",
+        "parent_slug": "burgundy"
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [4.9495, 47.1367]
+      }
+    },
+    {
+      "type": "Feature",
+      "id": "gevrey-chambertin",
+      "properties": {
+        "name": "Gevrey-Chambertin",
+        "parent_slug": "burgundy"
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [4.9683, 47.2269]
+      }
+    }
+  ]
+}
+

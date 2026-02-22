@@ -46,6 +46,10 @@ body,
   isolation: isolate;
 }
 
+.map-poi {
+  pointer-events: none;
+}
+
 .mask-canvas {
   position: absolute;
   inset: 0;

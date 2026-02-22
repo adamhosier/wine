@@ -8,7 +8,13 @@
     "build": "tsc -b && vite build",
     "preview": "vite preview",
     "download-tiles": "tsx scripts/download-tiles.ts",
-    "refresh-borders": "tsx scripts/refresh-borders.ts"
+    "download-subregion-mid-tiles": "tsx scripts/download-subregion-mid-tiles.ts",
+    "download-subregion-tiles": "tsx scripts/download-subregion-tiles.ts",
+    "refresh-borders": "tsx scripts/refresh-borders.ts",
+    "build-france-subregions": "tsx scripts/build-wine-subregions-osm.ts",
+    "build-wine-subregions": "tsx scripts/build-wine-subregions-osm.ts",
+    "build-burgundy-detail": "tsx scripts/build-wine-detail-subregions.ts",
+    "build-wine-detail": "tsx scripts/build-wine-detail-subregions.ts"
   },
   "keywords": [
     "maplibre",
@@ -19,8 +25,15 @@
   "license": "MIT",
   "type": "module",
   "dependencies": {
+    "@turf/area": "^7.3.4",
+    "@turf/concave": "^7.3.4",
+    "@turf/convex": "^7.3.4",
+    "@turf/helpers": "^7.3.4",
+    "@turf/simplify": "^7.3.4",
     "earcut": "^3.0.2",
     "maplibre-gl": "^5.18.0",
+    "polygon-clipping": "^0.15.7",
+    "proj4": "^2.20.2",
     "react": "^19.2.4",
     "react-dom": "^19.2.4"
   },
@@ -30,7 +43,10 @@
     "@types/node": "^25.3.0",
     "@types/react": "^19.2.14",
     "@types/react-dom": "^19.2.3",
+    "@types/shapefile": "^0.6.4",
     "@vitejs/plugin-react": "^5.1.4",
+    "dbffile": "^1.12.0",
+    "shapefile": "^0.6.6",
     "tsx": "^4.21.0",
     "typescript": "^5.9.3",
     "vite": "^7.3.1"
