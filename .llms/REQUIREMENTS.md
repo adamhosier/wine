@@ -10,10 +10,9 @@ Static GitHub Pages app: slippy world map with NASA cloudless imagery, region ov
   - `src/lib/data.ts` for lazy GeoJSON asset loading
   - `src/lib/layers.ts` for MapLibre source/layer wiring
   - `src/lib/mapFactory.ts` for shared map instantiation defaults
-  - `src/lib/maskRenderer.ts` for region mask rendering/scheduling
-  - `src/lib/maskGeometry.ts` for reusable mask triangulation/projection prep
   - `src/lib/regionIndex.ts` + `src/lib/debug.ts` for pure map-index/debug derivation helpers
   - `src/lib/focusState.ts`, `src/lib/layerVisibility.ts`, `src/lib/waypointVisibility.ts`, `src/lib/maskSelection.ts` for shared tree/focus UI behavior
+  - single-renderer mask compositing helpers in `src/lib/focusMask.ts`
 
 ## Imagery and tiles
 - NASA GIBS EPSG:3857 XYZ URL (`BlueMarble_ShadedRelief_Bathymetry`, `GoogleMapsCompatible_Level8`)
@@ -101,12 +100,12 @@ Static GitHub Pages app: slippy world map with NASA cloudless imagery, region ov
 - Detail build script: `scripts/build-wine-detail-subregions.ts` (invoked via `npm run build-wine-detail` or `npm run build-burgundy-detail`)
 
 ## Visual behavior
-- Two-pass imagery:
-  1. Full-world processed layer (greyscale + subtle blur)
-  2. Normal-color layer clipped by region mask
-- Soft edge on region mask boundary
+- Single-map compositing:
+  1. One MapLibre map instance renders imagery + vectors
+  2. Outside-region treatment is applied using an inverse GeoJSON mask fill layer
+  3. Soft edge haze is applied by blurred line styling on active-region boundaries
 - Outlines always visible when no focused region: ruby/brown, 2px, no glow/shadow
-- When a region is focused, only that region is highlighted (normal-color); all other regions remain in processed/desaturated view
+- When a region is focused, only that region is highlighted; all other regions are visually de-emphasized by the outside-region veil/haze layers
 - Subregions display only for the currently focused parent region
 - Implicit polygon text labels are disabled for subregions/details; explicit POI markers/labels are the canonical labels
 - Crisp custom attribution badge (not blurred)
@@ -153,9 +152,8 @@ Static GitHub Pages app: slippy world map with NASA cloudless imagery, region ov
 - No user data storage
 - Keep dependencies minimal
 - Runtime performance constraints:
-  - throttle mask redraws to animation frames instead of every render frame
-  - cache polygon triangulation for the mask pipeline and only re-project camera-space vertices per frame
-  - coalesce move-driven UI updates (debug + waypoint visibility + mask schedule) into one animation-frame task
+  - avoid multi-map drift/tearing by keeping rendering in a single MapLibre instance
+  - avoid per-frame reprojection/canvas-mask generation in interaction paths
   - only recompute waypoint layer visibility/filter when effective state changes
   - use map tile request tuning (`cancelPendingTileRequestsWhileZooming`, larger tile cache zoom levels, disabled expired-tile refresh)
   - avoid duplicated per-level (country/subregion/detail) logic by routing focus and layer state through shared helpers
@@ -179,8 +177,7 @@ Static GitHub Pages app: slippy world map with NASA cloudless imagery, region ov
 - `src/lib/data.ts`
 - `src/lib/layers.ts`
 - `src/lib/mapFactory.ts`
-- `src/lib/maskRenderer.ts`
-- `src/lib/maskGeometry.ts`
+- `src/lib/focusMask.ts`
 - `src/lib/regionIndex.ts`
 - `src/lib/debug.ts`
 - `src/lib/focusState.ts`

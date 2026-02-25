@@ -4,8 +4,8 @@ Static React + MapLibre app that renders NASA GIBS cloudless imagery with region
 
 - Smooth slippy-map pan/zoom
 - Global wine-region hierarchy (country -> subregion -> detail)
-- Outside the regions: greyscale + subtle blur
-- Inside the regions: full-color imagery
+- Inside active regions: full imagery emphasis
+- Outside active regions: de-emphasized veil + soft edge haze (single-renderer compositing)
 - France high-zoom local tiles from `public/tiles/france/...` with NASA fallback
 - Wine subregion mid-zoom tiles from `public/tiles/france-subregions-mid/...`
 - Wine subregion ultra-high zoom tiles from `public/tiles/france-subregions/...` with local/remote fallback

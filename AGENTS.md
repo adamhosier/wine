@@ -20,7 +20,7 @@ Agent work should prioritize:
   - layer visibility control: `src/lib/layerVisibility.ts`
   - waypoint visibility control: `src/lib/waypointVisibility.ts`
   - mask polygon selection: `src/lib/maskSelection.ts`
-  - mask rendering pipeline: `src/lib/maskRenderer.ts`, `src/lib/maskGeometry.ts`
+  - single-map outside-region compositing: `src/lib/focusMask.ts` + `addFocusMaskLayers`/`setFocusMaskData` in `src/lib/layers.ts`
 
 ## Data Contracts
 - Top-level regions: `src/data/regions.geojson`
@@ -68,6 +68,7 @@ npm run download-subregion-tiles
 
 ## Implementation Rules
 - Keep hierarchy behavior generic. Do not add level-specific one-off logic if it can be expressed through shared focus/layer modules.
-- Keep expensive per-frame logic out of React state updates; use frame-throttled scheduling for move/zoom paths.
+- Keep expensive per-frame logic out of React state updates.
+- Maintain single-renderer architecture (one MapLibre instance). Do not reintroduce multi-map camera-sync stacks.
 - Prefer pure helper modules with tests when adding behavior.
 - Update `.llms/REQUIREMENTS.md` and `.llms/WINE_SUBREGIONS_SOURCES.md` when behavior or data source assumptions change.

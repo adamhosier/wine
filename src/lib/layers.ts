@@ -154,3 +154,64 @@ export function addDetailLayers(map: maplibregl.Map, details: DetailFeatureColle
   }
 }
 
+export function addFocusMaskLayers(map: maplibregl.Map) {
+  if (!map.getSource("focus-mask")) {
+    map.addSource("focus-mask", {
+      type: "geojson",
+      data: { type: "FeatureCollection", features: [] } as GeoJSON.GeoJSON,
+    });
+  }
+  if (!map.getSource("focus-edge")) {
+    map.addSource("focus-edge", {
+      type: "geojson",
+      data: { type: "FeatureCollection", features: [] } as GeoJSON.GeoJSON,
+    });
+  }
+
+  if (!map.getLayer("focus-mask-fill")) {
+    map.addLayer(
+      {
+        id: "focus-mask-fill",
+        type: "fill",
+        source: "focus-mask",
+        paint: {
+          "fill-color": "#080d14",
+          "fill-opacity": 0.42,
+        },
+      },
+      "regions-outline",
+    );
+  }
+
+  if (!map.getLayer("focus-edge-soft")) {
+    map.addLayer(
+      {
+        id: "focus-edge-soft",
+        type: "line",
+        source: "focus-edge",
+        paint: {
+          "line-color": "#0b1220",
+          "line-opacity": 0.42,
+          "line-width": 3.2,
+          "line-blur": 2.2,
+        },
+      },
+      "regions-outline",
+    );
+  }
+}
+
+export function setFocusMaskData(
+  map: maplibregl.Map,
+  maskData: GeoJSON.FeatureCollection<GeoJSON.Polygon>,
+  edgeData: GeoJSON.FeatureCollection<GeoJSON.Polygon>,
+) {
+  const maskSource = map.getSource("focus-mask") as maplibregl.GeoJSONSource | undefined;
+  if (maskSource) {
+    maskSource.setData(maskData as GeoJSON.GeoJSON);
+  }
+  const edgeSource = map.getSource("focus-edge") as maplibregl.GeoJSONSource | undefined;
+  if (edgeSource) {
+    edgeSource.setData(edgeData as GeoJSON.GeoJSON);
+  }
+}
