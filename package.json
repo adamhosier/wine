@@ -5,7 +5,13 @@
   "description": "Static MapLibre + NASA GIBS map with regional masking overlays",
   "scripts": {
     "dev": "vite",
+    "typecheck": "tsc -b --pretty false",
     "build": "tsc -b && vite build",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:coverage": "vitest run --coverage",
+    "validate:data": "tsx scripts/validate-data.ts",
+    "quality": "npm run typecheck && npm run validate:data && npm run test -- --run && npm run build",
     "preview": "vite preview",
     "download-tiles": "tsx scripts/download-tiles.ts",
     "download-subregion-mid-tiles": "tsx scripts/download-subregion-mid-tiles.ts",
@@ -26,14 +32,11 @@
   "type": "module",
   "dependencies": {
     "@turf/area": "^7.3.4",
-    "@turf/concave": "^7.3.4",
-    "@turf/convex": "^7.3.4",
     "@turf/helpers": "^7.3.4",
     "@turf/simplify": "^7.3.4",
     "earcut": "^3.0.2",
     "maplibre-gl": "^5.18.0",
     "polygon-clipping": "^0.15.7",
-    "proj4": "^2.20.2",
     "react": "^19.2.4",
     "react-dom": "^19.2.4"
   },
@@ -43,12 +46,11 @@
     "@types/node": "^25.3.0",
     "@types/react": "^19.2.14",
     "@types/react-dom": "^19.2.3",
-    "@types/shapefile": "^0.6.4",
     "@vitejs/plugin-react": "^5.1.4",
-    "dbffile": "^1.12.0",
-    "shapefile": "^0.6.6",
+    "@vitest/coverage-v8": "^2.1.8",
     "tsx": "^4.21.0",
     "typescript": "^5.9.3",
-    "vite": "^7.3.1"
+    "vite": "^7.3.1",
+    "vitest": "^2.1.8"
   }
 }

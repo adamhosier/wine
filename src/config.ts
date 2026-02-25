@@ -6,9 +6,7 @@ export const SUBREGION_TILE_FORMAT = "jpg";
 export const SUBREGION_REMOTE_TILE_TEMPLATE =
   "https://services.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}";
 
-export const FRANCE_BBOX: [number, number, number, number] = [
-  -5.3, 41.0, 9.9, 51.2,
-];
+export const FRANCE_BBOX: [number, number, number, number] = [-5.3, 41.0, 9.9, 51.2];
 
 export const Z_BASE = 5;
 export const HI_Z_DELTA = 3;

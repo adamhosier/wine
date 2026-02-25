@@ -1,6 +1,7 @@
-import { mkdir, stat, writeFile } from "node:fs/promises";
+import { mkdir, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { FRANCE_BBOX, NASA_LAYER, NASA_TILE_FORMAT, NASA_TILE_MATRIX_SET, NASA_TIME, Z_HI } from "../src/config.js";
+import { fileExists, runPool, tileRangeForBbox } from "./lib/tiles.js";
 
 type CliOptions = {
   zoom: number;
@@ -42,56 +43,8 @@ function parseArgs(args: string[]): CliOptions {
   return options;
 }
 
-function lonToTileX(lon: number, zoom: number) {
-  return Math.floor(((lon + 180) / 360) * 2 ** zoom);
-}
-
-function latToTileY(lat: number, zoom: number) {
-  const latRad = (lat * Math.PI) / 180;
-  const n = Math.log(Math.tan(Math.PI / 4 + latRad / 2));
-  return Math.floor((1 - n / Math.PI) * (2 ** zoom) / 2);
-}
-
-function tileRangeForBbox(
-  [minLon, minLat, maxLon, maxLat]: [number, number, number, number],
-  zoom: number,
-) {
-  const xMin = Math.max(0, lonToTileX(minLon, zoom));
-  const xMax = Math.max(0, lonToTileX(maxLon, zoom));
-  const yMin = Math.max(0, latToTileY(maxLat, zoom));
-  const yMax = Math.max(0, latToTileY(minLat, zoom));
-
-  return {
-    xMin: Math.min(xMin, xMax),
-    xMax: Math.max(xMin, xMax),
-    yMin: Math.min(yMin, yMax),
-    yMax: Math.max(yMin, yMax),
-  };
-}
-
 function tileUrl(z: number, x: number, y: number) {
   return `https://gibs.earthdata.nasa.gov/wmts/epsg3857/best/${NASA_LAYER}/default/${NASA_TIME}/${NASA_TILE_MATRIX_SET}/${z}/${y}/${x}.${NASA_TILE_FORMAT}`;
-}
-
-async function fileExists(filePath: string) {
-  try {
-    await stat(filePath);
-    return true;
-  } catch {
-    return false;
-  }
-}
-
-async function runPool<T>(items: T[], concurrency: number, worker: (item: T) => Promise<void>) {
-  let index = 0;
-  const workers = Array.from({ length: concurrency }, async () => {
-    while (index < items.length) {
-      const current = items[index];
-      index += 1;
-      await worker(current);
-    }
-  });
-  await Promise.all(workers);
 }
 
 async function main() {

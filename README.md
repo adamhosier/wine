@@ -3,14 +3,15 @@
 Static React + MapLibre app that renders NASA GIBS cloudless imagery with regional masking:
 
 - Smooth slippy-map pan/zoom
-- France + Italy vector outlines and point labels
+- Global wine-region hierarchy (country -> subregion -> detail)
 - Outside the regions: greyscale + subtle blur
 - Inside the regions: full-color imagery
 - France high-zoom local tiles from `public/tiles/france/...` with NASA fallback
 - Wine subregion mid-zoom tiles from `public/tiles/france-subregions-mid/...`
 - Wine subregion ultra-high zoom tiles from `public/tiles/france-subregions/...` with local/remote fallback
+- GeoJSON datasets are loaded as static assets at runtime (not bundled into the main JS chunk)
 
-## Run locally
+## Local Development
 
 ```bash
 npm install
@@ -21,10 +22,28 @@ npm run download-subregion-tiles
 npm run dev
 ```
 
+## Quality Gate
+
+```bash
+npm run quality
+```
+
+This runs:
+- Type checking
+- Data integrity checks
+- Unit tests
+- Production build
+
 ## Build
 
 ```bash
 npm run build
+```
+
+Preview:
+
+```bash
+npm run preview
 ```
 
 ## Download France local tiles
@@ -74,9 +93,9 @@ npm run refresh-borders
 Outputs:
 
 - `src/data/countries.geojson` (all countries, local source of truth)
-- `src/data/regions.geojson` (currently filtered to France + Italy)
+- `src/data/regions.geojson` (active top-level wine regions)
 
-## Build France Wine Subregions
+## Build Wine Subregions
 
 Generate `src/data/france-wine-subregions.geojson` from the canonical OSM-based source pipeline:
 
@@ -84,11 +103,31 @@ Generate `src/data/france-wine-subregions.geojson` from the canonical OSM-based 
 npm run build-france-subregions
 ```
 
+Build detail-level regions (children of subregions):
+
+```bash
+npm run build-wine-detail
+```
+
 Source attribution and mapping notes are documented in:
 
 - `.llms/WINE_SUBREGIONS_SOURCES.md`
+- Agent runbook (architecture + workflows): `AGENTS.md`
+
+## Data Validation
+
+Validate hierarchy and key constraints in local GeoJSON data:
+
+```bash
+npm run validate:data
+```
 
 ## GitHub Pages
 
 The repo includes a Pages workflow in `.github/workflows/deploy.yml` that builds and publishes `dist/`.
 It sets `VITE_BASE_PATH` to `/<repo-name>/` during CI so assets resolve correctly on Pages.
+
+## CI
+
+`/.github/workflows/ci.yml` runs repository quality checks on push/PR:
+- `npm run quality`

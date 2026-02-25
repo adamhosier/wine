@@ -1,12 +1,17 @@
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
-import simplify from "@turf/simplify";
 import area from "@turf/area";
 import { feature } from "@turf/helpers";
-import polygonClipping from "polygon-clipping";
-import type { Feature, FeatureCollection, MultiPolygon, Polygon } from "geojson";
-
-type Geometry = Polygon | MultiPolygon;
+import type { Feature, FeatureCollection } from "geojson";
+import { sleep } from "./lib/async.js";
+import {
+  cleanGeometry,
+  intersectGeometry,
+  isPolygonGeometry,
+  subtractGeometry,
+  unionGeometries,
+  type Geometry,
+} from "./lib/geo-ops.js";
 
 type RegionDef = {
   slug: string;
@@ -385,40 +390,6 @@ const SUBREGIONS: RegionDef[] = [
   },
 ];
 
-function sleep(ms: number) {
-  return new Promise((resolve) => setTimeout(resolve, ms));
-}
-
-function isPolygonGeometry(geometry: GeoJSON.Geometry | undefined): geometry is Geometry {
-  return Boolean(geometry && (geometry.type === "Polygon" || geometry.type === "MultiPolygon"));
-}
-
-function toMultiPolygonCoords(geometry: Geometry): number[][][][] {
-  return geometry.type === "MultiPolygon" ? geometry.coordinates : [geometry.coordinates];
-}
-
-function fromMultiPolygonCoords(coords: number[][][][]): Geometry {
-  if (coords.length === 1) {
-    return {
-      type: "Polygon",
-      coordinates: coords[0],
-    };
-  }
-  return {
-    type: "MultiPolygon",
-    coordinates: coords,
-  };
-}
-
-function cleanGeometry(geometry: Geometry): Geometry {
-  const simplified = simplify(feature(geometry), {
-    tolerance: SIMPLIFY_TOLERANCE,
-    highQuality: true,
-    mutate: false,
-  });
-  return simplified.geometry as Geometry;
-}
-
 function scoreCandidate(region: RegionDef, item: Candidate): number {
   let score = 0;
   const className = item.className.toLowerCase();
@@ -473,7 +444,7 @@ async function fetchCandidatesForQuery(query: string): Promise<Candidate[]> {
     if (!isPolygonGeometry(item.geojson)) {
       continue;
     }
-    const geometry = cleanGeometry(item.geojson);
+    const geometry = cleanGeometry(item.geojson, SIMPLIFY_TOLERANCE);
     out.push({
       geometry,
       displayName: item.display_name ?? query,
@@ -485,57 +456,6 @@ async function fetchCandidatesForQuery(query: string): Promise<Candidate[]> {
   }
 
   return out;
-}
-
-function unionGeometries(geometries: Geometry[]): Geometry | null {
-  if (!geometries.length) {
-    return null;
-  }
-
-  let current = toMultiPolygonCoords(geometries[0]);
-  for (let i = 1; i < geometries.length; i += 1) {
-    const next = toMultiPolygonCoords(geometries[i]);
-    try {
-      current = polygonClipping.union(current as any, next as any) as number[][][][];
-    } catch {
-      // keep best-effort merge
-    }
-  }
-
-  if (!current?.length) {
-    return null;
-  }
-  return fromMultiPolygonCoords(current);
-}
-
-function intersectGeometry(geometry: Geometry, clip: Geometry): Geometry | null {
-  try {
-    const clipped = polygonClipping.intersection(
-      toMultiPolygonCoords(geometry) as any,
-      toMultiPolygonCoords(clip) as any,
-    ) as number[][][][];
-    if (!clipped?.length) {
-      return null;
-    }
-    return fromMultiPolygonCoords(clipped);
-  } catch {
-    return geometry;
-  }
-}
-
-function subtractGeometry(geometry: Geometry, mask: Geometry): Geometry | null {
-  try {
-    const diff = polygonClipping.difference(
-      toMultiPolygonCoords(geometry) as any,
-      toMultiPolygonCoords(mask) as any,
-    ) as number[][][][];
-    if (!diff?.length) {
-      return null;
-    }
-    return fromMultiPolygonCoords(diff);
-  } catch {
-    return geometry;
-  }
 }
 
 async function main() {
@@ -609,7 +529,7 @@ async function main() {
         source_license: OSM_SOURCE_LICENSE,
         source_queries: pickedSources.join(" | "),
       },
-      geometry: cleanGeometry(clipped),
+      geometry: cleanGeometry(clipped, SIMPLIFY_TOLERANCE),
     });
 
     console.log(`Drafted ${region.parentIsoA3}/${region.slug}: ${pickedSources.join(" ; ")}`);

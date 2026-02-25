@@ -6,10 +6,19 @@ Static GitHub Pages app: slippy world map with NASA cloudless imagery, region ov
 ## Stack
 - Vite + React + TypeScript
 - MapLibre GL JS
+- Runtime architecture modularization:
+  - `src/lib/data.ts` for lazy GeoJSON asset loading
+  - `src/lib/layers.ts` for MapLibre source/layer wiring
+  - `src/lib/mapFactory.ts` for shared map instantiation defaults
+  - `src/lib/maskRenderer.ts` for region mask rendering/scheduling
+  - `src/lib/maskGeometry.ts` for reusable mask triangulation/projection prep
+  - `src/lib/regionIndex.ts` + `src/lib/debug.ts` for pure map-index/debug derivation helpers
+  - `src/lib/focusState.ts`, `src/lib/layerVisibility.ts`, `src/lib/waypointVisibility.ts`, `src/lib/maskSelection.ts` for shared tree/focus UI behavior
 
 ## Imagery and tiles
 - NASA GIBS EPSG:3857 XYZ URL (`BlueMarble_ShadedRelief_Bathymetry`, `GoogleMapsCompatible_Level8`)
 - Constants/time in `src/config.ts`
+- Runtime data loading uses asset URLs (`?url`) + fetch to avoid embedding large GeoJSON in initial JS bundle
 - Local France hi-res cache in `public/tiles/france/{z}/{x}/{y}.jpg`
 - Local wine-subregion mid-res cache in `public/tiles/france-subregions-mid/{z}/{x}/{y}.jpg` (legacy path name)
 - Local wine-subregion ultra-hi-res cache in `public/tiles/france-subregions/{z}/{x}/{y}.jpg` (legacy path name)
@@ -20,6 +29,10 @@ Static GitHub Pages app: slippy world map with NASA cloudless imagery, region ov
     - tile source: local cache first, ArcGIS World Imagery fallback
   - Wine subregion ultra tier at `z >= Z_SUBREGION_HI` (currently z11+)
     - tile source: local cache first, ArcGIS World Imagery fallback
+- Processed/background map render cost reduction:
+  - processed layer uses NASA-only raster tier (normal/high-res tiers stay on the normal/color layer)
+  - raster cross-fade disabled on local/remote subregion tiers to reduce zoom transition latency
+  - France and wine tier bounds are computed from loaded geometry at runtime (not fixed global envelope)
 - Tile fetch script: `scripts/download-tiles.ts`
 - Subregion mid tile fetch script: `scripts/download-subregion-mid-tiles.ts`
 - Subregion tile fetch script: `scripts/download-subregion-tiles.ts`
@@ -139,10 +152,45 @@ Static GitHub Pages app: slippy world map with NASA cloudless imagery, region ov
 - No backend
 - No user data storage
 - Keep dependencies minimal
+- Runtime performance constraints:
+  - throttle mask redraws to animation frames instead of every render frame
+  - cache polygon triangulation for the mask pipeline and only re-project camera-space vertices per frame
+  - coalesce move-driven UI updates (debug + waypoint visibility + mask schedule) into one animation-frame task
+  - only recompute waypoint layer visibility/filter when effective state changes
+  - use map tile request tuning (`cancelPendingTileRequestsWhileZooming`, larger tile cache zoom levels, disabled expired-tile refresh)
+  - avoid duplicated per-level (country/subregion/detail) logic by routing focus and layer state through shared helpers
+  - remove duplicated helper logic in scripts via shared libs:
+    - `scripts/lib/tiles.ts`
+    - `scripts/lib/geo-ops.ts`
+    - `scripts/lib/async.ts`
+- Production quality gates:
+  - `npm run typecheck`
+  - `npm run validate:data`
+  - `npm run test -- --run`
+  - `npm run build`
+- CI:
+  - `.github/workflows/ci.yml` runs full quality checks on push/PR
+  - `.github/workflows/deploy.yml` runs type/data/test checks before Pages publish
 
 ## Key files
+- `AGENTS.md`
 - `src/MapView.tsx`
 - `src/config.ts`
+- `src/lib/data.ts`
+- `src/lib/layers.ts`
+- `src/lib/mapFactory.ts`
+- `src/lib/maskRenderer.ts`
+- `src/lib/maskGeometry.ts`
+- `src/lib/regionIndex.ts`
+- `src/lib/debug.ts`
+- `src/lib/focusState.ts`
+- `src/lib/layerVisibility.ts`
+- `src/lib/waypointVisibility.ts`
+- `src/lib/maskSelection.ts`
+- `src/lib/focus.ts`
+- `src/lib/geo.ts`
+- `src/lib/mapStyle.ts`
+- `src/lib/waypoints.ts`
 - `src/data/regions.geojson`
 - `src/data/countries.geojson`
 - `src/data/france-wine-subregions.geojson`
@@ -154,5 +202,10 @@ Static GitHub Pages app: slippy world map with NASA cloudless imagery, region ov
 - `scripts/refresh-borders.ts`
 - `scripts/build-wine-subregions-osm.ts`
 - `scripts/build-wine-detail-subregions.ts`
+- `scripts/validate-data.ts`
+- `scripts/lib/tiles.ts`
+- `scripts/lib/geo-ops.ts`
+- `scripts/lib/async.ts`
 - `.llms/WINE_SUBREGIONS_SOURCES.md`
+- `.github/workflows/ci.yml`
 - `.github/workflows/deploy.yml`

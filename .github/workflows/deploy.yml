@@ -24,6 +24,9 @@ jobs:
           node-version: "20"
           cache: "npm"
       - run: npm ci
+      - run: npm run typecheck
+      - run: npm run validate:data
+      - run: npm run test -- --run
       - run: npm run build
         env:
           VITE_BASE_PATH: /${{ github.event.repository.name }}/
@@ -40,4 +43,3 @@ jobs:
     steps:
       - id: deployment
         uses: actions/deploy-pages@v4
-
