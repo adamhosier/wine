@@ -8,6 +8,9 @@ Static GitHub Pages app: slippy world map with NASA cloudless imagery, region ov
 - MapLibre GL JS
 - Runtime architecture modularization:
   - `src/lib/data.ts` for lazy GeoJSON asset loading
+    - runtime-selectable data sources:
+      - `wset-level-2` (all configured hierarchy data)
+      - `depth-demo-uk` (5-level hierarchy demo: UK -> England -> London -> Hackney -> Clissold Park)
   - `src/lib/layers.ts` for MapLibre source/layer wiring
   - `src/lib/mapFactory.ts` for shared map instantiation defaults
   - `src/lib/regionIndex.ts` + `src/lib/debug.ts` for pure map-index/debug derivation helpers
@@ -140,6 +143,9 @@ Static GitHub Pages app: slippy world map with NASA cloudless imagery, region ov
 
 ## UI
 - Debug overlay includes zoom, center, tile source, and focused region
+- Data-source selector in HUD:
+  - source switch should re-load runtime data and rebuild focus tree/graph
+  - available options: full dataset and random-country sample (1-level only)
 - Globe/zoomed-out waypoints:
   - derive marker points from subregion geometry centers (no hardcoded city list)
   - show only when unfocused and zoomed out

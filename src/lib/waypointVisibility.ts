@@ -19,7 +19,7 @@ export function computeWaypointLayerState(
   let filter: maplibregl.FilterSpecification | null = null;
   let filterKey = "none";
   if (showGlobalSubregionWaypoints) {
-    filter = ["==", ["get", "waypoint_level"], "subregion"] as maplibregl.FilterSpecification;
+    filter = ["==", ["get", "waypoint_depth"], 1] as maplibregl.FilterSpecification;
     filterKey = "global";
   } else if (showChildWaypoints && focusNode) {
     filter = ["==", ["get", "parent_node_id"], focusNode.id] as maplibregl.FilterSpecification;

@@ -1,8 +1,7 @@
 import type maplibregl from "maplibre-gl";
 import type {
-  DetailFeatureCollection,
+  HierarchyNodesFeatureCollection,
   RegionsFeatureCollection,
-  SubregionsFeatureCollection,
   WaypointFeatureCollection,
 } from "./data";
 
@@ -78,18 +77,18 @@ export function addVectorLayers(
   }
 }
 
-export function addSubregionLayers(map: maplibregl.Map, data: SubregionsFeatureCollection) {
-  if (!map.getSource("france-subregions")) {
-    map.addSource("france-subregions", {
+export function addHierarchyNodeLayers(map: maplibregl.Map, data: HierarchyNodesFeatureCollection) {
+  if (!map.getSource("hierarchy-nodes")) {
+    map.addSource("hierarchy-nodes", {
       type: "geojson",
       data: data as GeoJSON.GeoJSON,
     });
   }
-  if (!map.getLayer("france-subregions-line")) {
+  if (!map.getLayer("hierarchy-nodes-line")) {
     map.addLayer({
-      id: "france-subregions-line",
+      id: "hierarchy-nodes-line",
       type: "line",
-      source: "france-subregions",
+      source: "hierarchy-nodes",
       layout: {
         visibility: "none",
       },
@@ -100,49 +99,11 @@ export function addSubregionLayers(map: maplibregl.Map, data: SubregionsFeatureC
       },
     });
   }
-  if (!map.getLayer("france-subregions-hit-fill")) {
+  if (!map.getLayer("hierarchy-nodes-hit-fill")) {
     map.addLayer({
-      id: "france-subregions-hit-fill",
+      id: "hierarchy-nodes-hit-fill",
       type: "fill",
-      source: "france-subregions",
-      layout: {
-        visibility: "none",
-      },
-      paint: {
-        "fill-color": "#000000",
-        "fill-opacity": 0,
-      },
-    });
-  }
-}
-
-export function addDetailLayers(map: maplibregl.Map, details: DetailFeatureCollection) {
-  if (!map.getSource("burgundy-detail-subregions")) {
-    map.addSource("burgundy-detail-subregions", {
-      type: "geojson",
-      data: details as GeoJSON.GeoJSON,
-    });
-  }
-  if (!map.getLayer("burgundy-detail-subregions-line")) {
-    map.addLayer({
-      id: "burgundy-detail-subregions-line",
-      type: "line",
-      source: "burgundy-detail-subregions",
-      layout: {
-        visibility: "none",
-      },
-      paint: {
-        "line-color": "#c8888c",
-        "line-width": 1.4,
-        "line-opacity": 0.95,
-      },
-    });
-  }
-  if (!map.getLayer("burgundy-detail-subregions-hit-fill")) {
-    map.addLayer({
-      id: "burgundy-detail-subregions-hit-fill",
-      type: "fill",
-      source: "burgundy-detail-subregions",
+      source: "hierarchy-nodes",
       layout: {
         visibility: "none",
       },
@@ -213,5 +174,14 @@ export function setFocusMaskData(
   const edgeSource = map.getSource("focus-edge") as maplibregl.GeoJSONSource | undefined;
   if (edgeSource) {
     edgeSource.setData(edgeData as GeoJSON.GeoJSON);
+  }
+}
+
+export function bringWaypointLayersToFront(map: maplibregl.Map) {
+  if (map.getLayer("waypoints-circle")) {
+    map.moveLayer("waypoints-circle");
+  }
+  if (map.getLayer("waypoints-label")) {
+    map.moveLayer("waypoints-label");
   }
 }

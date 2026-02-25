@@ -6,15 +6,9 @@ import maplibregl, {
 } from "maplibre-gl";
 import {
   FRANCE_BBOX,
-  HI_Z_DELTA,
   INITIAL_CENTER,
   INITIAL_ZOOM,
-  SUBREGION_HI_Z_DELTA,
-  SUBREGION_MID_Z_DELTA,
-  Z_BASE,
-  Z_HI,
   Z_SUBREGION_HI,
-  Z_SUBREGION_MID,
 } from "./config";
 import {
   createMapStyle,
@@ -24,31 +18,32 @@ import {
 } from "./lib/mapStyle";
 import { createRuntimeMap } from "./lib/mapFactory";
 import {
-  buildDetailWaypoints,
   buildExplicitWaypoints,
-  buildSubregionWaypoints,
+  buildHierarchyWaypoints,
   mergeWaypoints,
 } from "./lib/waypoints";
-import { clickedFeatureKey, type PolygonRings } from "./lib/geo";
+import { clickedFeatureKey, polygonsFromGeometry, type PolygonRings } from "./lib/geo";
 import {
-  buildFocusGraph,
+  buildFocusGraphFromNodes,
+  getFocusChain,
   hashForFocus,
   resolveHashToFocusNode,
   type FocusNode,
 } from "./lib/focus";
-import { loadRuntimeData, type RuntimeData } from "./lib/data";
 import {
-  addDetailLayers,
+  loadRuntimeData,
+  RUNTIME_DATA_SOURCES,
+  type RuntimeData,
+  type RuntimeDataSourceId,
+} from "./lib/data";
+import {
   addFocusMaskLayers,
-  addSubregionLayers,
+  addHierarchyNodeLayers,
   addVectorLayers,
+  bringWaypointLayersToFront,
   setFocusMaskData,
 } from "./lib/layers";
-import { describeTileSource, hasMeaningfulDebugDelta, type DebugSnapshot } from "./lib/debug";
 import {
-  buildPolygonsBySlug,
-  buildRegionLabelByKey,
-  buildRegionPolygonsByKey,
   collectBboxes,
   collectRegionPolygons,
   findRegionBoundsByKey,
@@ -61,10 +56,9 @@ import {
   shouldPopFocusOnZoomOut,
 } from "./lib/focusState";
 import {
-  applyDetailVisibility,
+  applyHierarchyChildrenVisibility,
   applyOutlineFocusFilter,
-  applySubregionVisibility,
-  hasDetailChildren,
+  hasChildren,
 } from "./lib/layerVisibility";
 import { selectMaskPolygons } from "./lib/maskSelection";
 import { toFocusEdgeData, toFocusMaskData } from "./lib/focusMask";
@@ -75,12 +69,15 @@ const UNFOCUS_ZOOM_LEEWAY = 0.35;
 
 export default function MapView() {
   const basePath = import.meta.env.BASE_URL;
+  const [selectedSourceId, setSelectedSourceId] = useState<RuntimeDataSourceId>("wset-level-2");
   const [runtimeData, setRuntimeData] = useState<RuntimeData | null>(null);
   const [runtimeDataError, setRuntimeDataError] = useState<string | null>(null);
 
   useEffect(() => {
     let cancelled = false;
-    loadRuntimeData()
+    setRuntimeData(null);
+    setRuntimeDataError(null);
+    loadRuntimeData(selectedSourceId)
       .then((data) => {
         if (!cancelled) {
           setRuntimeData(data);
@@ -95,103 +92,75 @@ export default function MapView() {
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [selectedSourceId]);
 
-  const REGIONS_DATA = runtimeData?.regions ?? null;
-  const WINE_SUBREGIONS_DATA = runtimeData?.subregions ?? null;
-  const WINE_DETAIL_SUBREGIONS_DATA = runtimeData?.details ?? null;
-  const BURGUNDY_WAYPOINTS = runtimeData?.explicitWaypoints ?? null;
+  const ROOT_REGIONS_DATA = runtimeData?.regions ?? null;
+  const HIERARCHY_NODES_DATA = runtimeData?.hierarchyNodes ?? null;
+  const EXPLICIT_WAYPOINTS_DATA = runtimeData?.explicitWaypoints ?? null;
 
   const waypoints = useMemo(
     () =>
       mergeWaypoints([
-        buildSubregionWaypoints(WINE_SUBREGIONS_DATA ? [WINE_SUBREGIONS_DATA] : []),
-        buildDetailWaypoints(WINE_DETAIL_SUBREGIONS_DATA ? [WINE_DETAIL_SUBREGIONS_DATA] : []),
-        buildExplicitWaypoints(BURGUNDY_WAYPOINTS ? [BURGUNDY_WAYPOINTS] : []),
+        buildHierarchyWaypoints(HIERARCHY_NODES_DATA ? [HIERARCHY_NODES_DATA] : []),
+        buildExplicitWaypoints(EXPLICIT_WAYPOINTS_DATA ? [EXPLICIT_WAYPOINTS_DATA] : []),
       ]),
-    [WINE_SUBREGIONS_DATA, WINE_DETAIL_SUBREGIONS_DATA, BURGUNDY_WAYPOINTS],
+    [HIERARCHY_NODES_DATA, EXPLICIT_WAYPOINTS_DATA],
   );
 
   const mapContainerRef = useRef<HTMLDivElement | null>(null);
   const mapRef = useRef<MapLibreMap | null>(null);
   const activeFocusNodeIdRef = useRef<string | null>(null);
-  const activeRegionKeyRef = useRef<string | null>(null);
-  const activeSubregionSlugRef = useRef<string | null>(null);
-  const activeDetailSlugRef = useRef<string | null>(null);
   const focusZoomByNodeIdRef = useRef<Map<string, number>>(new Map());
   const zoomGestureStartRef = useRef<number | null>(null);
   const isProgrammaticCameraRef = useRef(false);
   const lastWaypointStyleSignatureRef = useRef<string>("");
-  const debugRafRef = useRef<number | null>(null);
-  const lastDebugSnapshotRef = useRef<DebugSnapshot | null>(null);
-
-  const [debug, setDebug] = useState<DebugSnapshot>({
-    zoom: INITIAL_ZOOM,
-    centerLon: INITIAL_CENTER[0],
-    centerLat: INITIAL_CENTER[1],
-    source: "NASA",
-  });
-  const [activeRegionKey, setActiveRegionKey] = useState<string | null>(null);
-  const [activeSubregionSlug, setActiveSubregionSlug] = useState<string | null>(null);
-  const [activeDetailSlug, setActiveDetailSlug] = useState<string | null>(null);
-
-  const regionLabelByKey = useMemo(
-    () => (REGIONS_DATA ? buildRegionLabelByKey(REGIONS_DATA) : new Map<string, string>()),
-    [REGIONS_DATA],
+  const [activeFocusPath, setActiveFocusPath] = useState<string>("None");
+  const allRootPolygons = useMemo<PolygonRings[]>(
+    () => (ROOT_REGIONS_DATA ? collectRegionPolygons(ROOT_REGIONS_DATA) : []),
+    [ROOT_REGIONS_DATA],
   );
-  const regionPolygons = useMemo<PolygonRings[]>(
-    () => (REGIONS_DATA ? collectRegionPolygons(REGIONS_DATA) : []),
-    [REGIONS_DATA],
-  );
-  const regionPolygonsByKey = useMemo(
-    () => (REGIONS_DATA ? buildRegionPolygonsByKey(REGIONS_DATA) : new Map<string, PolygonRings[]>()),
-    [REGIONS_DATA],
-  );
-  const subregionPolygonsBySlug = useMemo(
-    () =>
-      WINE_SUBREGIONS_DATA
-        ? buildPolygonsBySlug(WINE_SUBREGIONS_DATA)
-        : new Map<string, PolygonRings[]>(),
-    [WINE_SUBREGIONS_DATA],
-  );
+  const polygonsByNodeId = useMemo(() => {
+    const map = new Map<string, PolygonRings[]>();
+    if (ROOT_REGIONS_DATA) {
+      for (const feature of ROOT_REGIONS_DATA.features) {
+        const props = (feature.properties ?? {}) as Record<string, unknown>;
+        const nodeId = typeof props.node_id === "string" ? props.node_id : "";
+        if (nodeId) {
+          map.set(nodeId, polygonsFromGeometry(feature.geometry));
+        }
+      }
+    }
+    if (HIERARCHY_NODES_DATA) {
+      for (const feature of HIERARCHY_NODES_DATA.features) {
+        const props = (feature.properties ?? {}) as Record<string, unknown>;
+        const nodeId = typeof props.node_id === "string" ? props.node_id : "";
+        if (nodeId) {
+          map.set(nodeId, polygonsFromGeometry(feature.geometry));
+        }
+      }
+    }
+    return map;
+  }, [ROOT_REGIONS_DATA, HIERARCHY_NODES_DATA]);
   const subregionBounds = useMemo<Array<[number, number, number, number]>>(
-    () => (WINE_SUBREGIONS_DATA ? collectBboxes(WINE_SUBREGIONS_DATA) : []),
-    [WINE_SUBREGIONS_DATA],
-  );
-  const detailPolygonsBySlug = useMemo(
-    () =>
-      WINE_DETAIL_SUBREGIONS_DATA
-        ? buildPolygonsBySlug(WINE_DETAIL_SUBREGIONS_DATA)
-        : new Map<string, PolygonRings[]>(),
-    [WINE_DETAIL_SUBREGIONS_DATA],
+    () => (HIERARCHY_NODES_DATA ? collectBboxes(HIERARCHY_NODES_DATA) : []),
+    [HIERARCHY_NODES_DATA],
   );
 
   const {
     focusNodeById,
     focusChildrenByParentId,
     regionNodeIdByKey,
-    subregionNodeIdBySlug,
-    detailNodeIdBySlug,
   } = useMemo(
-    () =>
-      REGIONS_DATA && WINE_SUBREGIONS_DATA && WINE_DETAIL_SUBREGIONS_DATA
-        ? buildFocusGraph(REGIONS_DATA, WINE_SUBREGIONS_DATA, WINE_DETAIL_SUBREGIONS_DATA, Z_SUBREGION_HI)
-        : {
-            focusNodeById: new Map<string, FocusNode>(),
-            focusChildrenByParentId: new Map<string, string[]>(),
-            regionNodeIdByKey: new Map<string, string>(),
-            subregionNodeIdBySlug: new Map<string, string>(),
-            detailNodeIdBySlug: new Map<string, string>(),
-          },
-    [REGIONS_DATA, WINE_SUBREGIONS_DATA, WINE_DETAIL_SUBREGIONS_DATA],
+    () => buildFocusGraphFromNodes(runtimeData?.treeNodes ?? []),
+    [runtimeData?.treeNodes],
   );
 
   const franceLocalBounds = useMemo<[number, number, number, number]>(() => {
-    if (!REGIONS_DATA) {
+    if (!ROOT_REGIONS_DATA) {
       return FRANCE_BBOX;
     }
-    return findRegionBoundsByKey(REGIONS_DATA, "FRA") ?? FRANCE_BBOX;
-  }, [REGIONS_DATA]);
+    return findRegionBoundsByKey(ROOT_REGIONS_DATA, "FRA") ?? FRANCE_BBOX;
+  }, [ROOT_REGIONS_DATA]);
 
   const wineRegionBounds = useMemo<[number, number, number, number]>(
     () => mergeBboxes(subregionBounds, FRANCE_BBOX),
@@ -199,7 +168,7 @@ export default function MapView() {
   );
 
   useEffect(() => {
-    if (!REGIONS_DATA || !WINE_SUBREGIONS_DATA || !WINE_DETAIL_SUBREGIONS_DATA) {
+    if (!ROOT_REGIONS_DATA || !HIERARCHY_NODES_DATA) {
       return;
     }
     const container = mapContainerRef.current;
@@ -227,46 +196,6 @@ export default function MapView() {
       minZoom: 1.6,
     });
     mapRef.current = map;
-
-    const setDebugSnapshot = () => {
-      const currentMap = mapRef.current;
-      if (!currentMap) {
-        return;
-      }
-      const zoom = currentMap.getZoom();
-      const center = currentMap.getCenter();
-      const nextDebug: DebugSnapshot = {
-        zoom,
-        centerLon: center.lng,
-        centerLat: center.lat,
-        source: describeTileSource(
-          zoom,
-          center.lng,
-          center.lat,
-          franceLocalBounds,
-          subregionBounds,
-          Z_HI,
-          Z_SUBREGION_MID,
-          Z_SUBREGION_HI,
-        ),
-      };
-      const prevDebug = lastDebugSnapshotRef.current;
-      if (!hasMeaningfulDebugDelta(prevDebug, nextDebug)) {
-        return;
-      }
-      lastDebugSnapshotRef.current = nextDebug;
-      setDebug(nextDebug);
-    };
-
-    const scheduleDebugSnapshot = () => {
-      if (debugRafRef.current != null) {
-        return;
-      }
-      debugRafRef.current = window.requestAnimationFrame(() => {
-        debugRafRef.current = null;
-        setDebugSnapshot();
-      });
-    };
 
     const setWaypointVisibility = (nodeId: string | null) => {
       const currentMap = mapRef.current;
@@ -296,13 +225,9 @@ export default function MapView() {
         return;
       }
       const selectedPolygons = selectMaskPolygons({
-        activeRegionKey: activeRegionKeyRef.current,
-        activeSubregionSlug: activeSubregionSlugRef.current,
-        activeDetailSlug: activeDetailSlugRef.current,
-        allRegionPolygons: regionPolygons,
-        regionPolygonsByKey,
-        subregionPolygonsBySlug,
-        detailPolygonsBySlug,
+        activeNodeId: activeFocusNodeIdRef.current,
+        allRootPolygons,
+        polygonsByNodeId,
       });
       setFocusMaskData(currentMap, toFocusMaskData(selectedPolygons), toFocusEdgeData(selectedPolygons));
     };
@@ -326,28 +251,23 @@ export default function MapView() {
     const setFocusState = (nodeId: string | null, updateHash: boolean) => {
       const nextFocus = deriveActiveFocusState(nodeId, focusNodeById);
       activeFocusNodeIdRef.current = nextFocus.nodeId;
-      activeRegionKeyRef.current = nextFocus.regionKey;
-      activeSubregionSlugRef.current = nextFocus.subregionSlug;
-      activeDetailSlugRef.current = nextFocus.detailSlug;
 
       pruneFocusThresholds(focusZoomByNodeIdRef.current, nextFocus.nodeId, focusNodeById);
 
-      setActiveRegionKey(nextFocus.regionKey);
-      setActiveSubregionSlug(nextFocus.subregionSlug);
-      setActiveDetailSlug(nextFocus.detailSlug);
+      const focusPath = getFocusChain(nextFocus.nodeId, focusNodeById)
+        .map((node) => node.slug)
+        .join(" > ");
+      setActiveFocusPath(focusPath || "None");
 
-      applyOutlineFocusFilter([mapRef.current], nextFocus.regionKey);
-      applySubregionVisibility(mapRef.current, nextFocus.regionKey);
-      const detailVisible = hasDetailChildren(
-        nextFocus.subregionSlug,
-        subregionNodeIdBySlug,
-        focusChildrenByParentId,
-        focusNodeById,
+      const rootNodeId = getFocusChain(nextFocus.nodeId, focusNodeById)[0]?.id ?? null;
+      applyOutlineFocusFilter([mapRef.current], rootNodeId);
+      applyHierarchyChildrenVisibility(
+        mapRef.current,
+        nextFocus.nodeId,
+        hasChildren(nextFocus.nodeId, focusChildrenByParentId),
       );
-      applyDetailVisibility(mapRef.current, nextFocus.subregionSlug, detailVisible);
       updateFocusMaskFromState();
       setWaypointVisibility(nextFocus.nodeId);
-      scheduleDebugSnapshot();
       if (updateHash) {
         setHashForFocus();
       }
@@ -397,6 +317,9 @@ export default function MapView() {
     };
 
     const onRegionClick = (event: maplibregl.MapLayerMouseEvent) => {
+      if (activeFocusNodeIdRef.current) {
+        return;
+      }
       const clicked = event.features?.[0] as GeoJSON.Feature<GeoJSON.Polygon | GeoJSON.MultiPolygon> | undefined;
       if (!clicked) {
         return;
@@ -409,46 +332,17 @@ export default function MapView() {
       focusNodeByIdWithFit(nodeId, true, 850);
     };
 
-    const onSubregionClick = (event: maplibregl.MapLayerMouseEvent) => {
-      if (!activeRegionKeyRef.current) {
-        return;
-      }
+    const onHierarchyNodeClick = (event: maplibregl.MapLayerMouseEvent) => {
       const clicked = event.features?.[0] as GeoJSON.Feature<GeoJSON.Polygon | GeoJSON.MultiPolygon> | undefined;
       if (!clicked) {
         return;
       }
       const props = (clicked.properties ?? {}) as Record<string, unknown>;
-      const slug = typeof props.slug === "string" ? props.slug : "";
-      const parentIso = typeof props.parent_iso_a3 === "string" ? props.parent_iso_a3 : "";
-      if (parentIso !== activeRegionKeyRef.current) {
-        return;
-      }
-      const nodeId = subregionNodeIdBySlug.get(slug);
+      const nodeId = typeof props.node_id === "string" ? props.node_id : "";
       if (!nodeId) {
         return;
       }
       focusNodeByIdWithFit(nodeId, true, 700);
-    };
-
-    const onDetailClick = (event: maplibregl.MapLayerMouseEvent) => {
-      if (!activeSubregionSlugRef.current) {
-        return;
-      }
-      const clicked = event.features?.[0] as GeoJSON.Feature<GeoJSON.Polygon | GeoJSON.MultiPolygon> | undefined;
-      if (!clicked) {
-        return;
-      }
-      const props = (clicked.properties ?? {}) as Record<string, unknown>;
-      const slug = typeof props.slug === "string" ? props.slug : "";
-      const parentSlug = typeof props.parent_slug === "string" ? props.parent_slug : "";
-      if (parentSlug !== activeSubregionSlugRef.current) {
-        return;
-      }
-      const nodeId = detailNodeIdBySlug.get(slug);
-      if (!nodeId) {
-        return;
-      }
-      focusNodeByIdWithFit(nodeId, true, 650);
     };
 
     const onRegionMouseEnter = () => {
@@ -485,7 +379,6 @@ export default function MapView() {
       );
       if (!decision.pop) {
         setWaypointVisibility(activeFocusNodeIdRef.current);
-        scheduleDebugSnapshot();
         return;
       }
       if (!decision.parentId) {
@@ -503,12 +396,10 @@ export default function MapView() {
 
     const onMove = () => {
       setWaypointVisibility(activeFocusNodeIdRef.current);
-      scheduleDebugSnapshot();
     };
 
     const onMoveEnd = () => {
       setWaypointVisibility(activeFocusNodeIdRef.current);
-      setDebugSnapshot();
     };
 
     const onKeyDown = (event: KeyboardEvent) => {
@@ -526,24 +417,20 @@ export default function MapView() {
       }, 820);
     };
 
-    const onWindowResize = () => {
-      scheduleDebugSnapshot();
-    };
-
     const onMapReady = () => {
-      addVectorLayers(map, REGIONS_DATA, waypoints, true);
-      addSubregionLayers(map, WINE_SUBREGIONS_DATA);
-      addDetailLayers(map, WINE_DETAIL_SUBREGIONS_DATA);
+      addVectorLayers(map, ROOT_REGIONS_DATA, waypoints, true);
+      addHierarchyNodeLayers(map, HIERARCHY_NODES_DATA);
       addFocusMaskLayers(map);
+      bringWaypointLayersToFront(map);
       map.on("click", "regions-hit-fill", onRegionClick);
-      map.on("click", "france-subregions-hit-fill", onSubregionClick);
-      map.on("click", "burgundy-detail-subregions-hit-fill", onDetailClick);
+      map.on("click", "hierarchy-nodes-hit-fill", onHierarchyNodeClick);
       map.on("mouseenter", "regions-hit-fill", onRegionMouseEnter);
+      map.on("mouseenter", "hierarchy-nodes-hit-fill", onRegionMouseEnter);
       map.on("mouseleave", "regions-hit-fill", onRegionMouseLeave);
+      map.on("mouseleave", "hierarchy-nodes-hit-fill", onRegionMouseLeave);
       applyFocusFromHash();
       updateFocusMaskFromState();
       setWaypointVisibility(activeFocusNodeIdRef.current);
-      setDebugSnapshot();
     };
 
     map.on("load", onMapReady);
@@ -553,16 +440,10 @@ export default function MapView() {
     map.on("zoomend", onZoomEnd);
     window.addEventListener("hashchange", applyFocusFromHash);
     window.addEventListener("keydown", onKeyDown);
-    window.addEventListener("resize", onWindowResize);
 
     return () => {
       window.removeEventListener("hashchange", applyFocusFromHash);
       window.removeEventListener("keydown", onKeyDown);
-      window.removeEventListener("resize", onWindowResize);
-      if (debugRafRef.current != null) {
-        window.cancelAnimationFrame(debugRafRef.current);
-        debugRafRef.current = null;
-      }
       map.off("load", onMapReady);
       map.off("move", onMove);
       map.off("moveend", onMoveEnd);
@@ -570,29 +451,25 @@ export default function MapView() {
       map.off("zoomend", onZoomEnd);
       if (map.getLayer("regions-hit-fill")) {
         map.off("click", "regions-hit-fill", onRegionClick);
-        map.off("click", "france-subregions-hit-fill", onSubregionClick);
-        map.off("click", "burgundy-detail-subregions-hit-fill", onDetailClick);
+        map.off("click", "hierarchy-nodes-hit-fill", onHierarchyNodeClick);
         map.off("mouseenter", "regions-hit-fill", onRegionMouseEnter);
+        map.off("mouseenter", "hierarchy-nodes-hit-fill", onRegionMouseEnter);
         map.off("mouseleave", "regions-hit-fill", onRegionMouseLeave);
+        map.off("mouseleave", "hierarchy-nodes-hit-fill", onRegionMouseLeave);
       }
       map.remove();
       mapRef.current = null;
     };
   }, [
-    REGIONS_DATA,
-    WINE_SUBREGIONS_DATA,
-    WINE_DETAIL_SUBREGIONS_DATA,
-    detailNodeIdBySlug,
-    detailPolygonsBySlug,
+    ROOT_REGIONS_DATA,
+    HIERARCHY_NODES_DATA,
+    allRootPolygons,
     focusChildrenByParentId,
     focusNodeById,
     franceLocalBounds,
+    polygonsByNodeId,
     regionNodeIdByKey,
-    regionPolygons,
-    regionPolygonsByKey,
     subregionBounds,
-    subregionNodeIdBySlug,
-    subregionPolygonsBySlug,
     waypoints,
     wineRegionBounds,
     basePath,
@@ -635,37 +512,23 @@ export default function MapView() {
       </div>
 
       <div className="hud">
-        <div className="hud-title">Wine Regions Map</div>
         <div className="debug-item">
-          <span>Zoom:</span>
-          <strong>{debug.zoom.toFixed(2)}</strong>
+          <span>Data source:</span>
+          <select
+            className="source-select"
+            value={selectedSourceId}
+            onChange={(event) => setSelectedSourceId(event.target.value as RuntimeDataSourceId)}
+          >
+            {RUNTIME_DATA_SOURCES.map((source) => (
+              <option key={source.id} value={source.id}>
+                {source.label}
+              </option>
+            ))}
+          </select>
         </div>
         <div className="debug-item">
-          <span>Center:</span>
-          <strong>
-            {debug.centerLon.toFixed(4)}, {debug.centerLat.toFixed(4)}
-          </strong>
-        </div>
-        <div className="debug-item">
-          <span>Tile source:</span>
-          <strong>{debug.source}</strong>
-        </div>
-        <div className="debug-item">
-          <span>Focused:</span>
-          <strong>{activeRegionKey ? regionLabelByKey.get(activeRegionKey) ?? activeRegionKey : "None"}</strong>
-        </div>
-        <div className="debug-item">
-          <span>Sub focus:</span>
-          <strong>{activeSubregionSlug ?? "None"}</strong>
-        </div>
-        <div className="debug-item">
-          <span>Detail focus:</span>
-          <strong>{activeDetailSlug ?? "None"}</strong>
-        </div>
-        <div className="debug-item muted">
-          <span>
-            Local thresholds z{Z_HI}/z{Z_SUBREGION_MID}/z{Z_SUBREGION_HI} (base={Z_BASE}, +{HI_Z_DELTA}, +{SUBREGION_MID_Z_DELTA}, +{SUBREGION_HI_Z_DELTA})
-          </span>
+          <span>Path:</span>
+          <strong>{activeFocusPath}</strong>
         </div>
         <div className="debug-item muted">
           <span>Tips: click to focus, zoom out past focus to go up, press Esc for world view.</span>

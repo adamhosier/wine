@@ -22,7 +22,7 @@ describe("waypoint visibility", () => {
   it("shows global subregion waypoints when unfocused and zoomed out", () => {
     const state = computeWaypointLayerState(null, 4, 4.6);
     expect(state.visibility).toBe("visible");
-    expect(state.filter).toEqual(["==", ["get", "waypoint_level"], "subregion"]);
+    expect(state.filter).toEqual(["==", ["get", "waypoint_depth"], 1]);
     expect(state.signature).toBe("visible::global");
   });
 

@@ -1,11 +1,9 @@
 import { describe, expect, it } from "vitest";
 import {
-  buildDetailWaypoints,
   buildExplicitWaypoints,
-  buildSubregionWaypoints,
+  buildHierarchyWaypoints,
   mergeWaypoints,
-  type DetailFeatureCollection,
-  type SubregionsFeatureCollection,
+  type HierarchyNodesFeatureCollection,
   type WaypointFeatureCollection,
 } from "../src/lib/waypoints";
 
@@ -17,48 +15,42 @@ function square(minX: number, minY: number, maxX: number, maxY: number): GeoJSON
 }
 
 describe("waypoint builders", () => {
-  it("builds deduplicated subregion waypoints", () => {
-    const data: SubregionsFeatureCollection = {
+  it("builds deduplicated hierarchy waypoints", () => {
+    const data: HierarchyNodesFeatureCollection = {
       type: "FeatureCollection",
       features: [
         {
           type: "Feature",
-          id: "napa",
-          properties: { slug: "napa", name: "Napa", parent_iso_a3: "CAL" },
+          id: "subregion:england",
+          properties: {
+            node_id: "subregion:england",
+            parent_node_id: "region:GBR",
+            node_depth: 1,
+            slug: "england",
+            name: "England",
+          },
           geometry: square(0, 0, 2, 2),
         },
         {
           type: "Feature",
-          id: "napa",
-          properties: { slug: "napa", name: "Duplicate Napa", parent_iso_a3: "CAL" },
+          id: "subregion:england",
+          properties: {
+            node_id: "subregion:england",
+            parent_node_id: "region:GBR",
+            node_depth: 1,
+            slug: "england",
+            name: "Duplicate England",
+          },
           geometry: square(0, 0, 1, 1),
         },
       ],
     };
 
-    const out = buildSubregionWaypoints([data]);
+    const out = buildHierarchyWaypoints([data]);
     expect(out.features).toHaveLength(1);
-    expect(out.features[0].properties?.parent_node_id).toBe("region:CAL");
+    expect(out.features[0].properties?.parent_node_id).toBe("region:GBR");
+    expect(out.features[0].properties?.waypoint_depth).toBe(1);
     expect((out.features[0].geometry as GeoJSON.Point).coordinates).toEqual([1, 1]);
-  });
-
-  it("builds deduplicated detail waypoints with parent node id", () => {
-    const data: DetailFeatureCollection = {
-      type: "FeatureCollection",
-      features: [
-        {
-          type: "Feature",
-          id: "rutherford",
-          properties: { slug: "rutherford", parent_slug: "napa", name: "Rutherford" },
-          geometry: square(2, 2, 4, 4),
-        },
-      ],
-    };
-
-    const out = buildDetailWaypoints([data]);
-    expect(out.features).toHaveLength(1);
-    expect(out.features[0].properties?.parent_node_id).toBe("subregion:napa");
-    expect((out.features[0].geometry as GeoJSON.Point).coordinates).toEqual([3, 3]);
   });
 
   it("preserves explicit waypoints and normalizes parent metadata", () => {
@@ -67,16 +59,16 @@ describe("waypoint builders", () => {
       features: [
         {
           type: "Feature",
-          id: "beaune",
-          properties: { name: "Beaune", parent_slug: "burgundy" },
+          id: "clissold",
+          properties: { name: "Clissold", parent_slug: "hackney" },
           geometry: { type: "Point", coordinates: [4, 5] },
         },
       ],
     };
 
     const out = buildExplicitWaypoints([explicit]);
-    expect(out.features[0].properties?.parent_node_id).toBe("subregion:burgundy");
-    expect(out.features[0].properties?.waypoint_level).toBe("detail");
+    expect(out.features[0].properties?.parent_node_id).toBe("subregion:hackney");
+    expect(out.features[0].properties?.waypoint_depth).toBe(2);
   });
 
   it("merges waypoint collections", () => {
@@ -92,4 +84,3 @@ describe("waypoint builders", () => {
     expect(merged.features).toHaveLength(2);
   });
 });
-

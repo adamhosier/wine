@@ -1,76 +1,80 @@
 import { describe, expect, it } from "vitest";
-import { buildFocusGraph, getFocusChain, hashForFocus, resolveHashToFocusNode } from "../src/lib/focus";
+import {
+  buildFocusGraphFromNodes,
+  getFocusChain,
+  hashForFocus,
+  resolveHashToFocusNode,
+  type FocusNode,
+} from "../src/lib/focus";
 
-function square(minX: number, minY: number, maxX: number, maxY: number): GeoJSON.Polygon {
-  return {
-    type: "Polygon",
-    coordinates: [[[minX, minY], [maxX, minY], [maxX, maxY], [minX, maxY], [minX, minY]]],
-  };
-}
+const nodes: FocusNode[] = [
+  {
+    id: "region:GBR",
+    slug: "uk",
+    parentId: null,
+    depth: 0,
+    kind: "region",
+    regionKey: "GBR",
+    subregionSlug: null,
+    detailSlug: null,
+    bounds: [[0, 0], [10, 10]],
+    fitPadding: { top: 10, right: 10, bottom: 10, left: 10 },
+    fitMaxZoom: 6,
+  },
+  {
+    id: "subregion:england",
+    slug: "england",
+    parentId: "region:GBR",
+    depth: 1,
+    kind: "subregion",
+    regionKey: "GBR",
+    subregionSlug: "england",
+    detailSlug: null,
+    bounds: [[1, 1], [8, 8]],
+    fitPadding: { top: 8, right: 8, bottom: 8, left: 8 },
+    fitMaxZoom: 8,
+  },
+  {
+    id: "detail:london",
+    slug: "london",
+    parentId: "subregion:england",
+    depth: 2,
+    kind: "detail",
+    regionKey: "GBR",
+    subregionSlug: "england",
+    detailSlug: "london",
+    bounds: [[2, 2], [4, 4]],
+    fitPadding: { top: 6, right: 6, bottom: 6, left: 6 },
+    fitMaxZoom: 10,
+  },
+];
 
 describe("focus graph", () => {
-  const regions: GeoJSON.FeatureCollection<GeoJSON.Polygon | GeoJSON.MultiPolygon> = {
-    type: "FeatureCollection",
-    features: [
-      { type: "Feature", id: "CAL", properties: { name: "California", iso_a3: "CAL" }, geometry: square(0, 0, 10, 10) },
-      { type: "Feature", id: "FRA", properties: { name: "France", iso_a3: "FRA" }, geometry: square(20, 0, 30, 10) },
-    ],
-  };
-  const subregions: GeoJSON.FeatureCollection<GeoJSON.Polygon | GeoJSON.MultiPolygon> = {
-    type: "FeatureCollection",
-    features: [
-      { type: "Feature", id: "napa", properties: { slug: "napa", parent_iso_a3: "CAL" }, geometry: square(1, 1, 5, 5) },
-      { type: "Feature", id: "burgundy", properties: { slug: "burgundy", parent_iso_a3: "FRA" }, geometry: square(21, 1, 26, 6) },
-    ],
-  };
-  const details: GeoJSON.FeatureCollection<GeoJSON.Polygon | GeoJSON.MultiPolygon> = {
-    type: "FeatureCollection",
-    features: [
-      {
-        type: "Feature",
-        id: "rutherford",
-        properties: { slug: "rutherford", parent_slug: "napa" },
-        geometry: square(2, 2, 3, 3),
-      },
-    ],
-  };
+  const graph = buildFocusGraphFromNodes(nodes);
 
-  const graph = buildFocusGraph(regions, subregions, details, 11);
-
-  it("builds region, subregion, and detail nodes", () => {
-    expect(graph.regionNodeIdByKey.get("CAL")).toBe("region:CAL");
-    expect(graph.subregionNodeIdBySlug.get("napa")).toBe("subregion:napa");
-    expect(graph.detailNodeIdBySlug.get("rutherford")).toBe("detail:rutherford");
+  it("indexes node ids by kind keys", () => {
+    expect(graph.regionNodeIdByKey.get("GBR")).toBe("region:GBR");
+    expect(graph.subregionNodeIdBySlug.get("england")).toBe("subregion:england");
+    expect(graph.detailNodeIdBySlug.get("london")).toBe("detail:london");
   });
 
   it("creates parent-child chain", () => {
-    const detailId = graph.detailNodeIdBySlug.get("rutherford") ?? null;
-    const chain = getFocusChain(detailId, graph.focusNodeById).map((n) => n.id);
-    expect(chain).toEqual(["region:CAL", "subregion:napa", "detail:rutherford"]);
+    const chain = getFocusChain("detail:london", graph.focusNodeById).map((n) => n.id);
+    expect(chain).toEqual(["region:GBR", "subregion:england", "detail:london"]);
   });
 
   it("resolves hash to deepest available node", () => {
-    const resolved = resolveHashToFocusNode(
-      "california-napa-rutherford",
-      graph.focusChildrenByParentId,
-      graph.focusNodeById,
-    );
-    expect(resolved).toBe("detail:rutherford");
+    const resolved = resolveHashToFocusNode("uk-england-london", graph.focusChildrenByParentId, graph.focusNodeById);
+    expect(resolved).toBe("detail:london");
   });
 
   it("falls back to best partial hash match", () => {
-    const resolved = resolveHashToFocusNode(
-      "california-napa-unknown",
-      graph.focusChildrenByParentId,
-      graph.focusNodeById,
-    );
-    expect(resolved).toBe("subregion:napa");
+    const resolved = resolveHashToFocusNode("uk-england-missing", graph.focusChildrenByParentId, graph.focusNodeById);
+    expect(resolved).toBe("subregion:england");
   });
 
   it("builds hash from focus chain", () => {
-    const detailId = graph.detailNodeIdBySlug.get("rutherford") ?? null;
-    expect(hashForFocus(detailId, graph.focusNodeById)).toBe("#california-napa-rutherford");
+    expect(hashForFocus("detail:london", graph.focusNodeById)).toBe("#uk-england-london");
     expect(hashForFocus(null, graph.focusNodeById)).toBe("");
   });
 });
-

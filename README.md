@@ -10,6 +10,9 @@ Static React + MapLibre app that renders NASA GIBS cloudless imagery with region
 - Wine subregion mid-zoom tiles from `public/tiles/france-subregions-mid/...`
 - Wine subregion ultra-high zoom tiles from `public/tiles/france-subregions/...` with local/remote fallback
 - GeoJSON datasets are loaded as static assets at runtime (not bundled into the main JS chunk)
+- In-app data source selector:
+  - `WSET Level 2` (full hierarchy dataset)
+  - `Depth Demo (UK)` (5-level hierarchy chain: UK -> England -> London -> Hackney -> Clissold Park)
 
 ## Local Development
 
