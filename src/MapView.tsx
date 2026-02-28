@@ -18,6 +18,7 @@ import {
 } from "./lib/mapStyle";
 import { createRuntimeMap } from "./lib/mapFactory";
 import {
+  buildLeafInfoPoints,
   buildExplicitWaypoints,
   buildHierarchyWaypoints,
   mergeWaypoints,
@@ -63,6 +64,7 @@ import {
 import { selectMaskPolygons } from "./lib/maskSelection";
 import { toFocusEdgeData, toFocusMaskData } from "./lib/focusMask";
 import { applyWaypointLayerState, computeWaypointLayerState } from "./lib/waypointVisibility";
+import { createLeafInfoMarkers, selectVisibleLeafInfoFeatures } from "./lib/leafInfoMarkers";
 
 const WAYPOINTS_MAX_ZOOM = 4.6;
 const UNFOCUS_ZOOM_LEEWAY = 0.35;
@@ -106,6 +108,14 @@ export default function MapView() {
       ]),
     [HIERARCHY_NODES_DATA, EXPLICIT_WAYPOINTS_DATA],
   );
+  const leafInfoPoints = useMemo(
+    () =>
+      buildLeafInfoPoints([
+        ...(ROOT_REGIONS_DATA ? [ROOT_REGIONS_DATA] : []),
+        ...(HIERARCHY_NODES_DATA ? [HIERARCHY_NODES_DATA] : []),
+      ]),
+    [ROOT_REGIONS_DATA, HIERARCHY_NODES_DATA],
+  );
 
   const mapContainerRef = useRef<HTMLDivElement | null>(null);
   const mapRef = useRef<MapLibreMap | null>(null);
@@ -114,6 +124,7 @@ export default function MapView() {
   const zoomGestureStartRef = useRef<number | null>(null);
   const isProgrammaticCameraRef = useRef(false);
   const lastWaypointStyleSignatureRef = useRef<string>("");
+  const leafInfoMarkersRef = useRef<maplibregl.Marker[]>([]);
   const [activeFocusPath, setActiveFocusPath] = useState<string>("None");
   const allRootPolygons = useMemo<PolygonRings[]>(
     () => (ROOT_REGIONS_DATA ? collectRegionPolygons(ROOT_REGIONS_DATA) : []),
@@ -154,6 +165,25 @@ export default function MapView() {
     () => buildFocusGraphFromNodes(runtimeData?.treeNodes ?? []),
     [runtimeData?.treeNodes],
   );
+  const leafNodeIds = useMemo(() => {
+    const childrenByParent = new Map<string, string[]>();
+    for (const node of runtimeData?.treeNodes ?? []) {
+      const key = node.parentId ?? "__root__";
+      const bucket = childrenByParent.get(key);
+      if (bucket) {
+        bucket.push(node.id);
+      } else {
+        childrenByParent.set(key, [node.id]);
+      }
+    }
+    const leaves = new Set<string>();
+    for (const node of runtimeData?.treeNodes ?? []) {
+      if (!(childrenByParent.get(node.id) ?? []).length) {
+        leaves.add(node.id);
+      }
+    }
+    return leaves;
+  }, [runtimeData?.treeNodes]);
 
   const franceLocalBounds = useMemo<[number, number, number, number]>(() => {
     if (!ROOT_REGIONS_DATA) {
@@ -209,6 +239,23 @@ export default function MapView() {
       }
       lastWaypointStyleSignatureRef.current = state.signature;
       applyWaypointLayerState(currentMap, state);
+    };
+
+    const clearLeafInfoMarkers = () => {
+      for (const marker of leafInfoMarkersRef.current) {
+        marker.remove();
+      }
+      leafInfoMarkersRef.current = [];
+    };
+
+    const setLeafInfoVisibility = (nodeId: string | null) => {
+      const currentMap = mapRef.current;
+      if (!currentMap) {
+        return;
+      }
+      clearLeafInfoMarkers();
+      const features = selectVisibleLeafInfoFeatures(nodeId, leafNodeIds, leafInfoPoints);
+      leafInfoMarkersRef.current = createLeafInfoMarkers(currentMap, features);
     };
 
     const setHashForFocus = () => {
@@ -268,6 +315,7 @@ export default function MapView() {
       );
       updateFocusMaskFromState();
       setWaypointVisibility(nextFocus.nodeId);
+      setLeafInfoVisibility(nextFocus.nodeId);
       if (updateHash) {
         setHashForFocus();
       }
@@ -317,7 +365,10 @@ export default function MapView() {
     };
 
     const onRegionClick = (event: maplibregl.MapLayerMouseEvent) => {
-      if (activeFocusNodeIdRef.current) {
+      const hierarchyHits = map.queryRenderedFeatures(event.point, {
+        layers: ["hierarchy-nodes-hit-fill"],
+      });
+      if (hierarchyHits.length) {
         return;
       }
       const clicked = event.features?.[0] as GeoJSON.Feature<GeoJSON.Polygon | GeoJSON.MultiPolygon> | undefined;
@@ -379,6 +430,7 @@ export default function MapView() {
       );
       if (!decision.pop) {
         setWaypointVisibility(activeFocusNodeIdRef.current);
+        setLeafInfoVisibility(activeFocusNodeIdRef.current);
         return;
       }
       if (!decision.parentId) {
@@ -431,6 +483,7 @@ export default function MapView() {
       applyFocusFromHash();
       updateFocusMaskFromState();
       setWaypointVisibility(activeFocusNodeIdRef.current);
+      setLeafInfoVisibility(activeFocusNodeIdRef.current);
     };
 
     map.on("load", onMapReady);
@@ -457,6 +510,7 @@ export default function MapView() {
         map.off("mouseleave", "regions-hit-fill", onRegionMouseLeave);
         map.off("mouseleave", "hierarchy-nodes-hit-fill", onRegionMouseLeave);
       }
+      clearLeafInfoMarkers();
       map.remove();
       mapRef.current = null;
     };
@@ -471,8 +525,10 @@ export default function MapView() {
     regionNodeIdByKey,
     subregionBounds,
     waypoints,
+    leafInfoPoints,
     wineRegionBounds,
     basePath,
+    leafNodeIds,
   ]);
 
   if (runtimeDataError) {
@@ -532,6 +588,9 @@ export default function MapView() {
         </div>
         <div className="debug-item muted">
           <span>Tips: click to focus, zoom out past focus to go up, press Esc for world view.</span>
+        </div>
+        <div className="debug-item muted">
+          <a href={`${basePath.replace(/\/$/, "")}/quiz`}>Open Quiz</a>
         </div>
       </div>
 

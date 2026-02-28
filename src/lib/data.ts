@@ -2,6 +2,7 @@ import regionsGeoJsonUrl from "../data/regions.geojson?url";
 import wineSubregionsGeoJsonUrl from "../data/france-wine-subregions.geojson?url";
 import wineDetailGeoJsonUrl from "../data/burgundy-detail-subregions.geojson?url";
 import waypointGeoJsonUrl from "../data/burgundy-waypoints.geojson?url";
+import { LEAF_GRAPE_PROFILES } from "../data/leaf-grape-profiles";
 import { Z_SUBREGION_HI } from "../config";
 import { clickedFeatureKey, regionSlug } from "./geo";
 import { buildRegionTreeNodes, type RegionTreeNode } from "./regionTree";
@@ -41,6 +42,101 @@ export type RuntimeData = {
   explicitWaypoints: WaypointFeatureCollection;
   treeNodes: RegionTreeNode[];
 };
+
+type GrapeBreakdownEntry = {
+  grape: string;
+  pct: number;
+};
+
+function templateForCount(count: number): number[] {
+  if (count <= 1) return [100];
+  if (count === 2) return [70, 30];
+  if (count === 3) return [60, 25, 15];
+  if (count === 4) return [50, 20, 15, 15];
+  if (count === 5) return [40, 20, 15, 15, 10];
+  if (count === 6) return [35, 20, 15, 10, 10, 10];
+  const head = [35, 20, 15];
+  const remaining = 100 - head.reduce((acc, value) => acc + value, 0);
+  const tailCount = count - head.length;
+  const tailBase = Math.floor(remaining / tailCount);
+  const extra = remaining - tailBase * tailCount;
+  const tail = Array.from({ length: tailCount }, (_, index) => tailBase + (index < extra ? 1 : 0));
+  return [...head, ...tail];
+}
+
+function grapeBreakdownFromList(grapes: string[]): GrapeBreakdownEntry[] {
+  const cleaned = grapes.map((value) => value.trim()).filter(Boolean);
+  if (!cleaned.length) {
+    return [];
+  }
+  const weights = templateForCount(cleaned.length);
+  return cleaned.map((grape, index) => ({
+    grape,
+    pct: weights[index] ?? 0,
+  }));
+}
+
+function computeLeafNodeIds(nodes: RegionTreeNode[]): Set<string> {
+  const byParent = new Map<string, string[]>();
+  for (const node of nodes) {
+    const key = node.parentId ?? "__root__";
+    const bucket = byParent.get(key);
+    if (bucket) {
+      bucket.push(node.id);
+    } else {
+      byParent.set(key, [node.id]);
+    }
+  }
+  return new Set(nodes.filter((node) => !(byParent.get(node.id) ?? []).length).map((node) => node.id));
+}
+
+function annotateLeafInfo(
+  regions: RegionsFeatureCollection,
+  hierarchyNodes: HierarchyNodesFeatureCollection,
+  leafNodeIds: Set<string>,
+): {
+  regions: RegionsFeatureCollection;
+  hierarchyNodes: HierarchyNodesFeatureCollection;
+} {
+  const addInfo = (feature: GeoJSON.Feature<PolygonOrMulti>): GeoJSON.Feature<PolygonOrMulti> => {
+    const props = (feature.properties ?? {}) as Record<string, unknown>;
+    const nodeId = typeof props.node_id === "string" ? props.node_id : "";
+    if (!nodeId || !leafNodeIds.has(nodeId)) {
+      return {
+        ...feature,
+        properties: {
+          ...props,
+          leaf_is_leaf: false,
+        },
+      };
+    }
+    const profile = LEAF_GRAPE_PROFILES[nodeId];
+    const breakdown = profile ? grapeBreakdownFromList(profile.grapes) : [];
+    const grapeText = breakdown.map((entry) => `${entry.grape} ${entry.pct}%`).join(", ");
+    return {
+      ...feature,
+      properties: {
+        ...props,
+        leaf_is_leaf: true,
+        leaf_grapes: profile?.grapes ?? [],
+        leaf_grape_breakdown: breakdown,
+        leaf_grapes_text: grapeText,
+        leaf_sources: profile?.sources ?? [],
+      },
+    };
+  };
+
+  return {
+    regions: {
+      ...regions,
+      features: regions.features.map((feature) => addInfo(feature)),
+    },
+    hierarchyNodes: {
+      ...hierarchyNodes,
+      features: hierarchyNodes.features.map((feature) => addInfo(feature)),
+    },
+  };
+}
 
 async function fetchGeoJson<T>(url: string): Promise<T> {
   const response = await fetch(url, { cache: "force-cache" });
@@ -222,13 +318,17 @@ function createUkDepthDemoData(): RuntimeData {
     features: [],
   };
 
+  const treeNodes = buildRegionTreeNodes(regions, hierarchyNodes, Z_SUBREGION_HI);
+  const leafNodeIds = computeLeafNodeIds(treeNodes);
+  const annotated = annotateLeafInfo(regions, hierarchyNodes, leafNodeIds);
+
   return {
     sourceId: "depth-demo-uk",
     sourceLabel: sourceLabelFor("depth-demo-uk"),
-    regions,
-    hierarchyNodes,
+    regions: annotated.regions,
+    hierarchyNodes: annotated.hierarchyNodes,
     explicitWaypoints,
-    treeNodes: buildRegionTreeNodes(regions, hierarchyNodes, Z_SUBREGION_HI),
+    treeNodes,
   };
 }
 
@@ -246,13 +346,16 @@ export async function loadRuntimeData(sourceId: RuntimeDataSourceId = "wset-leve
 
   const regions = normalizeRootRegions(regionsRaw);
   const hierarchyNodes = normalizeHierarchyNodes(subregions, details);
+  const treeNodes = buildRegionTreeNodes(regions, hierarchyNodes, Z_SUBREGION_HI);
+  const leafNodeIds = computeLeafNodeIds(treeNodes);
+  const annotated = annotateLeafInfo(regions, hierarchyNodes, leafNodeIds);
 
   return {
     sourceId,
     sourceLabel: sourceLabelFor(sourceId),
-    regions,
-    hierarchyNodes,
+    regions: annotated.regions,
+    hierarchyNodes: annotated.hierarchyNodes,
     explicitWaypoints,
-    treeNodes: buildRegionTreeNodes(regions, hierarchyNodes, Z_SUBREGION_HI),
+    treeNodes,
   };
 }

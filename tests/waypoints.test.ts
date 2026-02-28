@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  buildLeafInfoPoints,
   buildExplicitWaypoints,
   buildHierarchyWaypoints,
   mergeWaypoints,
@@ -82,5 +83,38 @@ describe("waypoint builders", () => {
     };
     const merged = mergeWaypoints([a, b]);
     expect(merged.features).toHaveLength(2);
+  });
+
+  it("builds leaf info points from annotated leaf features", () => {
+    const data: HierarchyNodesFeatureCollection = {
+      type: "FeatureCollection",
+      features: [
+        {
+          type: "Feature",
+          id: "detail:sancerre",
+          properties: {
+            node_id: "detail:sancerre",
+            parent_node_id: "subregion:loire",
+            name: "Sancerre",
+            leaf_is_leaf: true,
+            leaf_grapes_text: "Sauvignon Blanc 85%, Pinot Noir 15%",
+            leaf_grape_breakdown: [
+              { grape: "Sauvignon Blanc", pct: 85 },
+              { grape: "Pinot Noir", pct: 15 },
+            ],
+          },
+          geometry: square(1, 1, 3, 3),
+        },
+      ],
+    };
+    const points = buildLeafInfoPoints([data]);
+    expect(points.features).toHaveLength(1);
+    expect(points.features[0].properties?.node_id).toBe("detail:sancerre");
+    expect(points.features[0].properties?.grape_text).toBe("Sauvignon Blanc 85%, Pinot Noir 15%");
+    expect(points.features[0].properties?.grape_lines).toEqual([
+      "Sauvignon Blanc: 85%",
+      "Pinot Noir: 15%",
+    ]);
+    expect((points.features[0].geometry as GeoJSON.Point).coordinates).toEqual([2, 2]);
   });
 });

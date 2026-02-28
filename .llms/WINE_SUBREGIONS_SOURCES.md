@@ -72,3 +72,41 @@
 - New South Wales: `hunter-valley`
 - Victoria: `yarra-valley`, `mornington-peninsula`
 - Western Australia: `margaret-river`
+
+## Leaf Grape Profile Sources (WSET Level 2)
+- Data file: `src/data/leaf-grape-profiles.ts`
+- Coverage: all current WSET Level 2 leaf nodes (79/79 at time of writing)
+- Method:
+  - Curated primary grape varieties per leaf node
+  - Stored as data (not hardcoded in renderer) and merged into runtime feature properties
+  - Percentages are derived from ordered grape prominence templates per node (deterministic heuristic), then rendered as grape composition breakdown
+  - Shown via leaf-node info boxes in the map UI
+
+### Primary source set used for regional grape profiles
+- France regional/appellation references:
+  - `https://www.bourgogne-wines.com/`
+  - `https://www.vins-rhone.com/en`
+  - `https://www.vins-bordeaux.fr/`
+  - `https://www.champagne.fr/en`
+  - `https://www.loirevalley-wines.com/`
+- Italy:
+  - `https://www.italianwinecentral.com/`
+  - `https://www.winescholarguild.com/resource/italy/`
+- Spain / Portugal:
+  - `https://www.winesfromspain.com/`
+  - `https://www.winesofportugal.com/en/`
+- Germany:
+  - `https://www.germanwines.de/`
+- United States:
+  - `https://www.wineinstitute.org/`
+  - `https://winefolly.com/`
+- Chile:
+  - `https://www.winesofchile.org/`
+- Argentina:
+  - `https://www.winesofargentina.org/`
+- South Africa:
+  - `https://www.wosa.co.za/`
+- Australia:
+  - `https://www.wineaustralia.com/`
+- New Zealand:
+  - `https://www.nzwine.com/`

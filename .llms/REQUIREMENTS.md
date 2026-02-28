@@ -98,6 +98,12 @@ Static GitHub Pages app: slippy world map with NASA cloudless imagery, region ov
     - Western Australia: margaret-river
     - common method: OSM candidate scoring -> clip to parent subregion -> simplify -> sibling de-overlap
   - Burgundy village waypoints (prototype POIs) remain in `src/data/burgundy-waypoints.geojson`
+- Leaf-node grape profiles for WSET Level 2 are stored in `src/data/leaf-grape-profiles.ts` and merged into runtime region feature properties:
+  - `leaf_is_leaf`
+  - `leaf_grapes`
+  - `leaf_grape_breakdown` (grape + percentage entries)
+  - `leaf_grapes_text`
+  - `leaf_sources`
 - Subregion source attribution is tracked in `.llms/WINE_SUBREGIONS_SOURCES.md`
 - Subregion build script: `scripts/build-wine-subregions-osm.ts` (invoked via `npm run build-wine-subregions` or `npm run build-france-subregions`)
 - Detail build script: `scripts/build-wine-detail-subregions.ts` (invoked via `npm run build-wine-detail` or `npm run build-burgundy-detail`)
@@ -142,16 +148,41 @@ Static GitHub Pages app: slippy world map with NASA cloudless imagery, region ov
 - Hash changes should apply focus; focusing a region should update URL hash
 
 ## UI
-- Debug overlay includes zoom, center, tile source, and focused region
+- Minimal top-left HUD:
+  - Data source selector
+  - Current focus path
+  - Interaction tips
 - Data-source selector in HUD:
   - source switch should re-load runtime data and rebuild focus tree/graph
-  - available options: full dataset and random-country sample (1-level only)
+  - available options: `WSET Level 2` and `Depth Demo (UK)`
 - Globe/zoomed-out waypoints:
   - derive marker points from subregion geometry centers (no hardcoded city list)
   - show only when unfocused and zoomed out
   - hide when region focus is active or camera is zoomed in
 - Region-focused waypoints:
   - POIs are treated as children of parent focus nodes and shown only when that parent is focused without a deeper focused child
+- Leaf-node grape info boxes:
+  - rendered as compact boxed overlays near leaf-node regions
+  - when focused node is a leaf: show that node's grape box
+  - when focused node is a parent: show grape boxes for its leaf children
+  - box content includes grape composition percentages
+- Quiz page (`/quiz`):
+  - separate page with dataset selector (`WSET Level 2`, `Depth Demo (UK)`)
+  - visual layout uses a dedicated quiz card with:
+    - header + subtitle + back link
+    - quiz toolbar with dataset control and score chips
+    - progress bar during active runs
+    - question panel with 2x2 answer grid (mobile collapses to 1 column)
+  - generates 20 multiple-choice questions from runtime hierarchy + grape profile data
+  - question ladder is difficulty-staged (easy -> hard)
+    - progression is smooth/continuous (no abrupt 2->3 difficulty step)
+  - tracks answers progressively and reports final score/accuracy
+  - hides per-question difficulty label in the UI
+  - question types include:
+    - parent/child region membership
+    - most common grape in a region
+    - approximate grape percentage share
+    - map-identification questions using a non-interactive static mini-map with highlighted region geometry
 
 ## Non-functional
 - No backend
@@ -179,6 +210,7 @@ Static GitHub Pages app: slippy world map with NASA cloudless imagery, region ov
 ## Key files
 - `AGENTS.md`
 - `src/MapView.tsx`
+- `src/QuizPage.tsx`
 - `src/config.ts`
 - `src/lib/data.ts`
 - `src/lib/layers.ts`
@@ -194,6 +226,7 @@ Static GitHub Pages app: slippy world map with NASA cloudless imagery, region ov
 - `src/lib/geo.ts`
 - `src/lib/mapStyle.ts`
 - `src/lib/waypoints.ts`
+- `src/lib/quiz.ts`
 - `src/data/regions.geojson`
 - `src/data/countries.geojson`
 - `src/data/france-wine-subregions.geojson`

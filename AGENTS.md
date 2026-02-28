@@ -31,6 +31,13 @@ Agent work should prioritize:
   - each feature must have `properties.slug` and `properties.parent_slug`
 - Explicit waypoints: `src/data/burgundy-waypoints.geojson`
   - `properties.parent_node_id` should be `region:*`, `subregion:*`, or `detail:*`
+- Leaf grape profiles: `src/data/leaf-grape-profiles.ts`
+  - keyed by leaf `node_id`
+  - merged onto runtime region/hierarchy feature properties as:
+    - `leaf_is_leaf`
+    - `leaf_grapes`
+    - `leaf_grapes_text`
+    - `leaf_sources`
 
 ## Quality Gates (Required Before Merge)
 Run all:
