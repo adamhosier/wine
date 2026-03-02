@@ -4,15 +4,9 @@ import maplibregl, {
   type LngLatLike,
   type Map as MapLibreMap,
 } from "maplibre-gl";
-import {
-  FRANCE_BBOX,
-  INITIAL_CENTER,
-  INITIAL_ZOOM,
-  Z_SUBREGION_HI,
-} from "./config";
+import { INITIAL_CENTER, INITIAL_ZOOM, WORLD_BBOX, Z_SUBREGION_HI } from "./config";
 import {
   createMapStyle,
-  toLocalTileTemplate,
   toSubregionLocalTileTemplate,
   toSubregionMidLocalTileTemplate,
 } from "./lib/mapStyle";
@@ -65,12 +59,14 @@ import { selectMaskPolygons } from "./lib/maskSelection";
 import { toFocusEdgeData, toFocusMaskData } from "./lib/focusMask";
 import { applyWaypointLayerState, computeWaypointLayerState } from "./lib/waypointVisibility";
 import { createLeafInfoMarkers, selectVisibleLeafInfoFeatures } from "./lib/leafInfoMarkers";
+import { buildQuizPath } from "./lib/appRoute";
 
 const WAYPOINTS_MAX_ZOOM = 4.6;
 const UNFOCUS_ZOOM_LEEWAY = 0.35;
 
 export default function MapView() {
   const basePath = import.meta.env.BASE_URL;
+  const quizPath = buildQuizPath(basePath);
   const [selectedSourceId, setSelectedSourceId] = useState<RuntimeDataSourceId>("wset-level-2");
   const [runtimeData, setRuntimeData] = useState<RuntimeData | null>(null);
   const [runtimeDataError, setRuntimeDataError] = useState<string | null>(null);
@@ -156,6 +152,33 @@ export default function MapView() {
     () => (HIERARCHY_NODES_DATA ? collectBboxes(HIERARCHY_NODES_DATA) : []),
     [HIERARCHY_NODES_DATA],
   );
+  const wineRegionBoundsByKey = useMemo<Array<{ key: string; bounds: [number, number, number, number] }>>(() => {
+    if (!ROOT_REGIONS_DATA || !HIERARCHY_NODES_DATA) {
+      return [];
+    }
+    const activeRootKeys = new Set<string>();
+    for (const feature of HIERARCHY_NODES_DATA.features) {
+      const props = (feature.properties ?? {}) as Record<string, unknown>;
+      const parentNodeId = typeof props.parent_node_id === "string" ? props.parent_node_id : "";
+      const match = parentNodeId.match(/^region:(.+)$/);
+      if (match?.[1]) {
+        activeRootKeys.add(match[1]);
+      }
+    }
+    return ROOT_REGIONS_DATA.features
+      .map((feature) => ({
+        key: clickedFeatureKey(feature as GeoJSON.Feature),
+        bounds: findRegionBoundsByKey(ROOT_REGIONS_DATA, clickedFeatureKey(feature as GeoJSON.Feature)),
+      }))
+      .filter(
+        (
+          entry,
+        ): entry is {
+          key: string;
+          bounds: [number, number, number, number];
+        } => activeRootKeys.has(entry.key) && Boolean(entry.bounds),
+      );
+  }, [ROOT_REGIONS_DATA, HIERARCHY_NODES_DATA]);
 
   const {
     focusNodeById,
@@ -164,6 +187,10 @@ export default function MapView() {
   } = useMemo(
     () => buildFocusGraphFromNodes(runtimeData?.treeNodes ?? []),
     [runtimeData?.treeNodes],
+  );
+  const rootRegionBounds = useMemo<Array<[number, number, number, number]>>(
+    () => (ROOT_REGIONS_DATA ? collectBboxes(ROOT_REGIONS_DATA) : []),
+    [ROOT_REGIONS_DATA],
   );
   const leafNodeIds = useMemo(() => {
     const childrenByParent = new Map<string, string[]>();
@@ -185,16 +212,9 @@ export default function MapView() {
     return leaves;
   }, [runtimeData?.treeNodes]);
 
-  const franceLocalBounds = useMemo<[number, number, number, number]>(() => {
-    if (!ROOT_REGIONS_DATA) {
-      return FRANCE_BBOX;
-    }
-    return findRegionBoundsByKey(ROOT_REGIONS_DATA, "FRA") ?? FRANCE_BBOX;
-  }, [ROOT_REGIONS_DATA]);
-
   const wineRegionBounds = useMemo<[number, number, number, number]>(
-    () => mergeBboxes(subregionBounds, FRANCE_BBOX),
-    [subregionBounds],
+    () => mergeBboxes(subregionBounds, mergeBboxes(rootRegionBounds, WORLD_BBOX)),
+    [rootRegionBounds, subregionBounds],
   );
 
   useEffect(() => {
@@ -211,12 +231,11 @@ export default function MapView() {
     const map = createRuntimeMap({
       container,
       style: createMapStyle(
-        toLocalTileTemplate(basePath),
         toSubregionMidLocalTileTemplate(basePath),
         toSubregionLocalTileTemplate(basePath),
         {
-          franceBounds: franceLocalBounds,
           wineRegionBounds,
+          wineRegionBoundsByKey,
         },
       ),
       center: INITIAL_CENTER as LngLatLike,
@@ -520,13 +539,14 @@ export default function MapView() {
     allRootPolygons,
     focusChildrenByParentId,
     focusNodeById,
-    franceLocalBounds,
     polygonsByNodeId,
     regionNodeIdByKey,
+    rootRegionBounds,
     subregionBounds,
     waypoints,
     leafInfoPoints,
     wineRegionBounds,
+    wineRegionBoundsByKey,
     basePath,
     leafNodeIds,
   ]);
@@ -590,7 +610,7 @@ export default function MapView() {
           <span>Tips: click to focus, zoom out past focus to go up, press Esc for world view.</span>
         </div>
         <div className="debug-item muted">
-          <a href={`${basePath.replace(/\/$/, "")}/quiz`}>Open Quiz</a>
+          <a href={quizPath}>Open Quiz</a>
         </div>
       </div>
 

@@ -21,21 +21,19 @@ Static GitHub Pages app: slippy world map with NASA cloudless imagery, region ov
 - NASA GIBS EPSG:3857 XYZ URL (`BlueMarble_ShadedRelief_Bathymetry`, `GoogleMapsCompatible_Level8`)
 - Constants/time in `src/config.ts`
 - Runtime data loading uses asset URLs (`?url`) + fetch to avoid embedding large GeoJSON in initial JS bundle
-- Local France hi-res cache in `public/tiles/france/{z}/{x}/{y}.jpg`
-- Local wine-subregion mid-res cache in `public/tiles/france-subregions-mid/{z}/{x}/{y}.jpg` (legacy path name)
-- Local wine-subregion ultra-hi-res cache in `public/tiles/france-subregions/{z}/{x}/{y}.jpg` (legacy path name)
+- Local wine-subregion mid-res cache in `public/tiles/wine-subregions-mid/{z}/{x}/{y}.jpg`
+- Local wine-subregion ultra-hi-res cache in `public/tiles/wine-subregions/{z}/{x}/{y}.jpg`
 - Runtime raster pyramid:
   - NASA global base
-  - France local tier at `z >= Z_HI` (currently z8)
   - Wine subregion mid tier at `z >= Z_SUBREGION_MID` and `< Z_SUBREGION_HI` (currently z7.5-z10)
     - tile source: local cache first, ArcGIS World Imagery fallback
+    - tier bounds are applied per root wine region to avoid near-global leakage from one merged bbox
   - Wine subregion ultra tier at `z >= Z_SUBREGION_HI` (currently z11+)
     - tile source: local cache first, ArcGIS World Imagery fallback
 - Processed/background map render cost reduction:
   - processed layer uses NASA-only raster tier (normal/high-res tiers stay on the normal/color layer)
   - raster cross-fade disabled on local/remote subregion tiers to reduce zoom transition latency
-  - France and wine tier bounds are computed from loaded geometry at runtime (not fixed global envelope)
-- Tile fetch script: `scripts/download-tiles.ts`
+  - root-region and wine-tier bounds are computed from loaded geometry at runtime (not fixed global envelope)
 - Subregion mid tile fetch script: `scripts/download-subregion-mid-tiles.ts`
 - Subregion tile fetch script: `scripts/download-subregion-tiles.ts`
 
@@ -54,7 +52,7 @@ Static GitHub Pages app: slippy world map with NASA cloudless imagery, region ov
   - Chile: mainland only (offshore islands excluded)
   - Australia: mainland + Tasmania only
 - Refresh script: `scripts/refresh-borders.ts`
-- Wine subregions in `src/data/france-wine-subregions.geojson` (legacy filename; now global):
+- Wine subregions in `src/data/wine-subregions.geojson`:
   - France: champagne, loire, burgundy, beaujolais, rhone, alsace, bordeaux, provence, languedoc-roussillon
   - Italy: puglia, piemonte, veneto, tuscany, marche, abruzzo, campania, prosecco
   - Germany: pfalz, mosel, rheingau
@@ -76,7 +74,7 @@ Static GitHub Pages app: slippy world map with NASA cloudless imagery, region ov
   - proxy query notes:
     - rhone is built from OSM proxy union (`Rhone` + `Drome` + `Vaucluse` + `Ardeche`)
     - bordeaux is built from OSM `Gironde` proxy
-  - Detail level in `src/data/burgundy-detail-subregions.geojson` (legacy filename; now multi-parent):
+  - Detail level in `src/data/wine-detail-subregions.geojson`:
     - Burgundy: cote-de-nuits, cote-de-beaune, chablis, maconnais
     - Loire: vouvray, touraine, sancerre, pouilly-fume
     - Beaujolais: fleurie
@@ -97,7 +95,7 @@ Static GitHub Pages app: slippy world map with NASA cloudless imagery, region ov
     - Victoria: yarra-valley, mornington-peninsula
     - Western Australia: margaret-river
     - common method: OSM candidate scoring -> clip to parent subregion -> simplify -> sibling de-overlap
-  - Burgundy village waypoints (prototype POIs) remain in `src/data/burgundy-waypoints.geojson`
+  - Prototype waypoints remain in `src/data/wine-waypoints.geojson`
 - Leaf-node grape profiles for WSET Level 2 are stored in `src/data/leaf-grape-profiles.ts` and merged into runtime region feature properties:
   - `leaf_is_leaf`
   - `leaf_grapes`
@@ -105,8 +103,8 @@ Static GitHub Pages app: slippy world map with NASA cloudless imagery, region ov
   - `leaf_grapes_text`
   - `leaf_sources`
 - Subregion source attribution is tracked in `.llms/WINE_SUBREGIONS_SOURCES.md`
-- Subregion build script: `scripts/build-wine-subregions-osm.ts` (invoked via `npm run build-wine-subregions` or `npm run build-france-subregions`)
-- Detail build script: `scripts/build-wine-detail-subregions.ts` (invoked via `npm run build-wine-detail` or `npm run build-burgundy-detail`)
+- Subregion build script: `scripts/build-wine-subregions-osm.ts` (invoked via `npm run build-wine-subregions`)
+- Detail build script: `scripts/build-wine-detail-subregions.ts` (invoked via `npm run build-wine-detail`)
 
 ## Visual behavior
 - Single-map compositing:
@@ -168,6 +166,7 @@ Static GitHub Pages app: slippy world map with NASA cloudless imagery, region ov
   - box content includes grape composition percentages
 - Quiz page (`/quiz`):
   - separate page with dataset selector (`WSET Level 2`, `Depth Demo (UK)`)
+  - GitHub Pages deep-linking to `/quiz` must work via SPA fallback restoration from `404.html`
   - visual layout uses a dedicated quiz card with:
     - header + subtitle + back link
     - quiz toolbar with dataset control and score chips
@@ -182,6 +181,7 @@ Static GitHub Pages app: slippy world map with NASA cloudless imagery, region ov
     - parent/child region membership
     - most common grape in a region
     - approximate grape percentage share
+    - curated grape-characteristic questions using hallmark aroma associations with contrastive distractors
     - map-identification questions using a non-interactive static mini-map with highlighted region geometry
 
 ## Non-functional
@@ -229,10 +229,9 @@ Static GitHub Pages app: slippy world map with NASA cloudless imagery, region ov
 - `src/lib/quiz.ts`
 - `src/data/regions.geojson`
 - `src/data/countries.geojson`
-- `src/data/france-wine-subregions.geojson`
-- `src/data/burgundy-detail-subregions.geojson`
-- `src/data/burgundy-waypoints.geojson`
-- `scripts/download-tiles.ts`
+- `src/data/wine-subregions.geojson`
+- `src/data/wine-detail-subregions.geojson`
+- `src/data/wine-waypoints.geojson`
 - `scripts/download-subregion-mid-tiles.ts`
 - `scripts/download-subregion-tiles.ts`
 - `scripts/refresh-borders.ts`

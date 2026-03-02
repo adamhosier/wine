@@ -6,8 +6,8 @@
 - License: ODbL 1.0
 - Subregion builder: `scripts/build-wine-subregions-osm.ts`
 - Detail builder: `scripts/build-wine-detail-subregions.ts`
-- Subregion output: `src/data/france-wine-subregions.geojson` (legacy filename, global content)
-- Detail output: `src/data/burgundy-detail-subregions.geojson` (legacy filename, multi-parent content)
+- Subregion output: `src/data/wine-subregions.geojson`
+- Detail output: `src/data/wine-detail-subregions.geojson`
 
 ## Common Geometry Pipeline
 - Query candidate polygons from Nominatim

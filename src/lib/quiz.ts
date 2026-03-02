@@ -1,6 +1,8 @@
 import type { RuntimeData } from "./data";
+import { GRAPE_CHARACTERISTIC_QUESTIONS } from "../data/grape-characteristics-questions";
 
 type GrapeEntry = { grape: string; pct: number };
+type QuestionCategory = "parent" | "child" | "map-region" | "grape-profile" | "grape-characteristic";
 
 export type QuizQuestion = {
   id: string;
@@ -20,6 +22,10 @@ type NodeMeta = {
   parentId: string | null;
   depth: number;
   grapes: GrapeEntry[];
+};
+
+type CandidateQuestion = QuizQuestion & {
+  category: QuestionCategory;
 };
 
 function hashString(value: string): number {
@@ -74,6 +80,10 @@ function parseGrapes(raw: unknown): GrapeEntry[] {
     .filter((value): value is GrapeEntry => Boolean(value));
 }
 
+function hasGrape(node: NodeMeta, grape: string): boolean {
+  return node.grapes.some((entry) => entry.grape === grape);
+}
+
 function nodeMetaFromData(data: RuntimeData): NodeMeta[] {
   const byId = new Map<string, NodeMeta>();
   const features = [...data.regions.features, ...data.hierarchyNodes.features];
@@ -124,10 +134,10 @@ function nodeMetaFromData(data: RuntimeData): NodeMeta[] {
 }
 
 function pushUnique(
-  bucket: QuizQuestion[],
+  bucket: CandidateQuestion[],
   seen: Set<string>,
   key: string,
-  create: () => QuizQuestion | null,
+  create: () => CandidateQuestion | null,
 ): void {
   if (seen.has(key)) {
     return;
@@ -199,6 +209,7 @@ export function generateQuizQuestions(
     }
   }
   const allGrapes = [...grapeSet];
+  const availableGrapes = new Set(allGrapes.map((grape) => grape.toLowerCase()));
   const grapesByRoot = new Map<string, string[]>();
   for (const node of nodes) {
     const rootId = resolveRootId(node.id);
@@ -211,24 +222,31 @@ export function generateQuizQuestions(
     grapesByRoot.set(rootId, bucket);
   }
 
-  const contextualNamePool = (node: NodeMeta): string[] => {
-    const sameRootSameDepth = nodes
-      .filter(
-        (entry) =>
-          entry.id !== node.id && entry.depth === node.depth && resolveRootId(entry.id) === resolveRootId(node.id),
-      )
-      .map((entry) => entry.name);
+  const contextualNodePool = (node: NodeMeta, predicate?: (entry: NodeMeta) => boolean): NodeMeta[] => {
+    const matches = (entry: NodeMeta): boolean =>
+      entry.id !== node.id && (predicate ? predicate(entry) : true);
+    const sameRootSameDepth = nodes.filter(
+      (entry) => matches(entry) && entry.depth === node.depth && resolveRootId(entry.id) === resolveRootId(node.id),
+    );
     if (sameRootSameDepth.length >= 3) {
       return sameRootSameDepth;
     }
-    const sameDepth = nodes.filter((entry) => entry.id !== node.id && entry.depth === node.depth).map((entry) => entry.name);
+    const sameDepth = nodes.filter((entry) => matches(entry) && entry.depth === node.depth);
     if (sameDepth.length >= 3) {
       return sameDepth;
+    }
+    return nodes.filter(matches);
+  };
+
+  const contextualNamePool = (node: NodeMeta): string[] => {
+    const pool = contextualNodePool(node);
+    if (pool.length) {
+      return pool.map((entry) => entry.name);
     }
     return allNames.filter((name) => name !== node.name);
   };
 
-  const candidates: QuizQuestion[] = [];
+  const candidates: CandidateQuestion[] = [];
   const seen = new Set<string>();
 
   for (const node of nodes) {
@@ -260,6 +278,7 @@ export function generateQuizQuestions(
       prompt: `${node.name} belongs to which parent region?`,
       options,
       correctIndex,
+      category: "parent",
     }));
   }
 
@@ -295,6 +314,7 @@ export function generateQuizQuestions(
         prompt: `Which of these regions is in ${parent.name}?`,
         options,
         correctIndex,
+        category: "child",
       }));
     }
   }
@@ -312,6 +332,7 @@ export function generateQuizQuestions(
       correctIndex: options.indexOf(node.name),
       kind: "map-region",
       highlightNodeId: node.id,
+      category: "map-region",
     }));
   }
 
@@ -338,65 +359,100 @@ export function generateQuizQuestions(
       options,
       correctIndex: options.indexOf(top.grape),
       meta: `${top.grape} ${top.pct}%`,
-    }));
-
-    const pctOptions = new Set<number>([top.pct]);
-    while (pctOptions.size < 4) {
-      const delta = Math.floor(rand() * 5 + 1) * 5;
-      const sign = rand() > 0.5 ? 1 : -1;
-      const candidate = Math.max(5, Math.min(95, top.pct + sign * delta));
-      pctOptions.add(candidate);
-      if (pctOptions.size > 8) {
-        break;
-      }
-    }
-    const pctList = [...pctOptions].slice(0, 4);
-    const pctLabels = pctList.map((value) => `${value}%`);
-    shuffleInPlace(pctLabels, rand);
-    pushUnique(candidates, seen, `grape-pct:${node.id}`, () => ({
-      id: `grape-pct:${node.id}`,
-      difficulty: 4,
-      prompt: `In ${node.name}, about what share is ${top.grape}?`,
-      options: pctLabels,
-      correctIndex: pctLabels.indexOf(`${top.pct}%`),
-      meta: `${top.grape} ${top.pct}%`,
+      category: "grape-profile",
     }));
   }
 
-  const byDifficulty = new Map<number, QuizQuestion[]>();
-  for (const candidate of candidates) {
-    const bucket = byDifficulty.get(candidate.difficulty);
-    if (bucket) {
-      bucket.push(candidate);
+  for (const node of nodes.filter((entry) => entry.grapes.length >= 1 && entry.grapes.length <= 3)) {
+    const sorted = [...node.grapes].sort((a, b) => b.pct - a.pct);
+    const top = sorted[0];
+    if (!top) {
+      continue;
+    }
+
+    let prompt = "";
+    let difficulty = 3;
+    let key = "";
+    let distractorPredicate: (entry: NodeMeta) => boolean = () => true;
+
+    if (sorted.length === 1) {
+      prompt = `Which of these regions grows 100% ${top.grape}?`;
+      difficulty = 3;
+      key = `grape-region:single:${node.id}`;
+      distractorPredicate = (entry) => !hasGrape(entry, top.grape);
+    } else if (sorted.length === 2) {
+      const blendLabel = `${sorted[0].grape} and ${sorted[1].grape}`;
+      prompt = `Which of these regions is known for a blend of ${blendLabel}?`;
+      difficulty = 4;
+      key = `grape-region:blend:${node.id}`;
+      distractorPredicate = (entry) => !(hasGrape(entry, sorted[0].grape) && hasGrape(entry, sorted[1].grape));
     } else {
-      byDifficulty.set(candidate.difficulty, [candidate]);
+      prompt = `Which of these regions is known for ${top.grape}?`;
+      difficulty = 4;
+      key = `grape-region:known:${node.id}`;
+      distractorPredicate = (entry) => !hasGrape(entry, top.grape);
     }
-  }
-  for (const bucket of byDifficulty.values()) {
-    shuffleInPlace(bucket, rand);
+
+    const distractors = pickDistinct(
+      contextualNodePool(node, distractorPredicate).map((entry) => entry.name),
+      3,
+      rand,
+    );
+    const regionOptions = [node.name, ...distractors];
+    shuffleInPlace(regionOptions, rand);
+    pushUnique(candidates, seen, key, () => ({
+      id: key,
+      difficulty,
+      prompt,
+      options: regionOptions,
+      correctIndex: regionOptions.indexOf(node.name),
+      meta: sorted.map((entry) => `${entry.grape} ${entry.pct}%`).join(", "),
+      category: "grape-profile",
+    }));
   }
 
-  const ordered: QuizQuestion[] = [];
-  const target = Math.max(1, count);
-  const pickNextByTargetDifficulty = (targetDifficulty: number): QuizQuestion | null => {
-    const available: Array<{ diff: number; question: QuizQuestion; bucket: QuizQuestion[] }> = [];
-    for (const bucket of byDifficulty.values()) {
-      if (!bucket.length) {
-        continue;
-      }
-      const question = bucket[0];
-      available.push({
-        diff: Math.abs(question.difficulty - targetDifficulty),
-        question,
-        bucket,
-      });
+  for (const question of GRAPE_CHARACTERISTIC_QUESTIONS) {
+    if (!question.requiredGrapes.every((grape) => availableGrapes.has(grape.toLowerCase()))) {
+      continue;
     }
+    pushUnique(candidates, seen, question.id, () => ({
+      id: question.id,
+      difficulty: question.difficulty,
+      prompt: question.prompt,
+      options: [...question.options],
+      correctIndex: question.correctIndex,
+      category: "grape-characteristic",
+    }));
+  }
+
+  const available = [...candidates];
+  shuffleInPlace(available, rand);
+  const ordered: CandidateQuestion[] = [];
+  const target = Math.max(1, count);
+  const categoryCounts = new Map<QuestionCategory, number>();
+  const pickNextByTargetDifficulty = (targetDifficulty: number): CandidateQuestion | null => {
     if (!available.length) {
       return null;
     }
-    available.sort((a, b) => a.diff - b.diff);
-    const best = available[0];
-    return best.bucket.shift() ?? null;
+    const lastCategory = ordered[ordered.length - 1]?.category ?? null;
+    let bestIndex = -1;
+    let bestScore = Number.POSITIVE_INFINITY;
+    for (let i = 0; i < available.length; i += 1) {
+      const question = available[i];
+      const difficultyPenalty = Math.abs(question.difficulty - targetDifficulty);
+      const categoryPenalty = (categoryCounts.get(question.category) ?? 0) * 0.35;
+      const repeatPenalty = question.category === lastCategory ? 0.2 : 0;
+      const score = difficultyPenalty + categoryPenalty + repeatPenalty;
+      if (score < bestScore) {
+        bestScore = score;
+        bestIndex = i;
+      }
+    }
+    if (bestIndex < 0) {
+      return null;
+    }
+    const [picked] = available.splice(bestIndex, 1);
+    return picked ?? null;
   };
 
   for (let i = 0; i < target; i += 1) {
@@ -407,6 +463,7 @@ export function generateQuizQuestions(
       break;
     }
     ordered.push(question);
+    categoryCounts.set(question.category, (categoryCounts.get(question.category) ?? 0) + 1);
   }
 
   if ((options?.allowRepeats ?? true) && ordered.length < target && candidates.length) {
@@ -423,7 +480,7 @@ export function generateQuizQuestions(
     }
   }
 
-  return ordered.slice(0, target);
+  return ordered.slice(0, target).map(({ category: _category, ...question }) => question);
 }
 
 export function countUniqueQuizQuestions(data: RuntimeData): number {

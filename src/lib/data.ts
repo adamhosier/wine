@@ -1,7 +1,7 @@
 import regionsGeoJsonUrl from "../data/regions.geojson?url";
-import wineSubregionsGeoJsonUrl from "../data/france-wine-subregions.geojson?url";
-import wineDetailGeoJsonUrl from "../data/burgundy-detail-subregions.geojson?url";
-import waypointGeoJsonUrl from "../data/burgundy-waypoints.geojson?url";
+import wineHierarchyGeoJsonUrl from "../data/wine-subregions.geojson?url";
+import wineDetailHierarchyGeoJsonUrl from "../data/wine-detail-subregions.geojson?url";
+import wineWaypointGeoJsonUrl from "../data/wine-waypoints.geojson?url";
 import { LEAF_GRAPE_PROFILES } from "../data/leaf-grape-profiles";
 import { Z_SUBREGION_HI } from "../config";
 import { clickedFeatureKey, regionSlug } from "./geo";
@@ -339,9 +339,9 @@ export async function loadRuntimeData(sourceId: RuntimeDataSourceId = "wset-leve
 
   const [regionsRaw, subregions, details, explicitWaypoints] = await Promise.all([
     fetchGeoJson<RegionsFeatureCollection>(regionsGeoJsonUrl),
-    fetchGeoJson<HierarchyNodesFeatureCollection>(wineSubregionsGeoJsonUrl),
-    fetchGeoJson<HierarchyNodesFeatureCollection>(wineDetailGeoJsonUrl),
-    fetchGeoJson<WaypointFeatureCollection>(waypointGeoJsonUrl),
+    fetchGeoJson<HierarchyNodesFeatureCollection>(wineHierarchyGeoJsonUrl),
+    fetchGeoJson<HierarchyNodesFeatureCollection>(wineDetailHierarchyGeoJsonUrl),
+    fetchGeoJson<WaypointFeatureCollection>(wineWaypointGeoJsonUrl),
   ]);
 
   const regions = normalizeRootRegions(regionsRaw);

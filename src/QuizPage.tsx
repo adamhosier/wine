@@ -7,6 +7,7 @@ import {
 } from "./lib/data";
 import { generateQuizQuestions } from "./lib/quiz";
 import QuizRegionMap from "./QuizRegionMap";
+import { buildAppPath } from "./lib/appRoute";
 
 const QUESTION_COUNT = 20;
 
@@ -14,6 +15,7 @@ type QuizPhase = "setup" | "running" | "finished";
 const nextQuizSeed = () => Math.floor(Math.random() * 0x7fffffff);
 
 export default function QuizPage() {
+  const mapPath = buildAppPath(import.meta.env.BASE_URL);
   const [sourceId, setSourceId] = useState<RuntimeDataSourceId>("wset-level-2");
   const [runtimeData, setRuntimeData] = useState<RuntimeData | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -134,9 +136,9 @@ export default function QuizPage() {
           <div className="quiz-title-wrap">
             <div className="quiz-kicker">Blind Tasting Trainer</div>
             <h1>Wine Regions Quiz</h1>
-            <p className="quiz-subtitle">Test region recognition, hierarchy recall, and grape composition.</p>
+            <p className="quiz-subtitle">Test region recognition, hierarchy recall, grape composition, and classic varietal aromas.</p>
           </div>
-          <a className="quiz-back-link" href={`${import.meta.env.BASE_URL}`}>
+          <a className="quiz-back-link" href={mapPath}>
             Back to Map
           </a>
         </div>
@@ -179,7 +181,7 @@ export default function QuizPage() {
         {runtimeData && phase === "setup" ? (
           <div className="quiz-panel quiz-setup">
             <p className="quiz-setup-title">{runtimeData.sourceLabel}</p>
-            <p>{`You will be asked 20 randomized multiple-choice questions that ramp in difficulty.`}</p>
+            <p>{`You will be asked 20 randomized multiple-choice questions covering regions, grapes, and classic aroma cues.`}</p>
             <button className="quiz-primary-btn" type="button" onClick={onStart}>
               Start Quiz
             </button>

@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import type { RuntimeData } from "../src/lib/data";
 import { generateQuizQuestions } from "../src/lib/quiz";
 import type { RegionTreeNode } from "../src/lib/regionTree";
+import { GRAPE_CHARACTERISTIC_QUESTIONS } from "../src/data/grape-characteristics-questions";
 
 function box(minLon: number, minLat: number, maxLon: number, maxLat: number): GeoJSON.Polygon {
   return {
@@ -106,6 +107,28 @@ const runtimeData: RuntimeData = {
 };
 
 describe("quiz generator", () => {
+  it("defines a large, valid bank of grape-characteristic questions", () => {
+    expect(GRAPE_CHARACTERISTIC_QUESTIONS.length).toBeGreaterThanOrEqual(50);
+    const ids = new Set<string>();
+    let hasDirectFormat = false;
+    let hasInverseFormat = false;
+    for (const question of GRAPE_CHARACTERISTIC_QUESTIONS) {
+      expect(ids.has(question.id)).toBe(false);
+      ids.add(question.id);
+      expect(question.options).toHaveLength(4);
+      expect(question.correctIndex).toBeGreaterThanOrEqual(0);
+      expect(question.correctIndex).toBeLessThan(question.options.length);
+      if (question.prompt.startsWith("Which grape shows characteristics of ")) {
+        hasDirectFormat = true;
+      }
+      if (question.prompt.includes(" shows which of the following sets of characteristics?")) {
+        hasInverseFormat = true;
+      }
+    }
+    expect(hasDirectFormat).toBe(true);
+    expect(hasInverseFormat).toBe(true);
+  });
+
   it("creates requested number of questions with valid correct indices", () => {
     const questions = generateQuizQuestions(runtimeData, 20);
     expect(questions).toHaveLength(20);
@@ -120,6 +143,63 @@ describe("quiz generator", () => {
     const questions = generateQuizQuestions(runtimeData, 20);
     expect(
       questions.some((question) => question.prompt.includes("most common grape variety in Gamma")),
+    ).toBe(true);
+  });
+
+  it("replaces percentage grape questions with region-character questions", () => {
+    const questions = generateQuizQuestions(runtimeData, 100, { allowRepeats: false, seed: 7 });
+    expect(
+      questions.some((question) => question.prompt === "Which of these regions is known for Cabernet Sauvignon?"),
+    ).toBe(true);
+    expect(questions.some((question) => question.prompt.includes("about what share is"))).toBe(false);
+  });
+
+  it("includes curated grape-characteristic questions when matching grapes are present", () => {
+    const characteristicTreeNodes: RegionTreeNode[] = [
+      ...treeNodes,
+      {
+        id: "detail:delta",
+        slug: "delta",
+        parentId: "subregion:beta",
+        depth: 2,
+        kind: "detail",
+        regionKey: "AAA",
+        subregionSlug: "beta",
+        detailSlug: "delta",
+        bounds: [-0.25, -0.25, 0.25, 0.25],
+        fitPadding: { top: 20, right: 20, bottom: 20, left: 20 },
+        fitMaxZoom: 10,
+      },
+    ];
+
+    const characteristicData: RuntimeData = {
+      ...runtimeData,
+      treeNodes: characteristicTreeNodes,
+      hierarchyNodes: {
+        type: "FeatureCollection",
+        features: [
+          ...runtimeData.hierarchyNodes.features,
+          {
+            type: "Feature",
+            properties: {
+              node_id: "detail:delta",
+              parent_node_id: "subregion:beta",
+              slug: "delta",
+              name: "Delta",
+              leaf_grape_breakdown: [{ grape: "Riesling", pct: 100 }],
+            },
+            geometry: box(-0.25, -0.25, 0.25, 0.25),
+          },
+        ],
+      },
+    };
+
+    const questions = generateQuizQuestions(characteristicData, 100, { allowRepeats: false, seed: 7 });
+    expect(
+      questions.some((question) => question.prompt === "Which grape shows characteristics of petroleum, lemon, and green apple?"),
+    ).toBe(true);
+    expect(
+      questions.some((question) => question.prompt === "Riesling shows which of the following sets of characteristics?"),
     ).toBe(true);
   });
 

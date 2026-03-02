@@ -13,13 +13,10 @@
     "validate:data": "tsx scripts/validate-data.ts",
     "quality": "npm run typecheck && npm run validate:data && npm run test -- --run && npm run build",
     "preview": "vite preview",
-    "download-tiles": "tsx scripts/download-tiles.ts",
     "download-subregion-mid-tiles": "tsx scripts/download-subregion-mid-tiles.ts",
     "download-subregion-tiles": "tsx scripts/download-subregion-tiles.ts",
     "refresh-borders": "tsx scripts/refresh-borders.ts",
-    "build-france-subregions": "tsx scripts/build-wine-subregions-osm.ts",
     "build-wine-subregions": "tsx scripts/build-wine-subregions-osm.ts",
-    "build-burgundy-detail": "tsx scripts/build-wine-detail-subregions.ts",
     "build-wine-detail": "tsx scripts/build-wine-detail-subregions.ts"
   },
   "keywords": [

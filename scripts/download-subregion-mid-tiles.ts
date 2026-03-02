@@ -1,6 +1,6 @@
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
-import { SUBREGION_REMOTE_TILE_TEMPLATE, SUBREGION_TILE_FORMAT, Z_SUBREGION_MID } from "../src/config.js";
+import { WINE_REGION_REMOTE_TILE_TEMPLATE, WINE_REGION_TILE_FORMAT, Z_SUBREGION_MID } from "../src/config.js";
 import { fileExists, geometryBbox, runPool, tileRangeForBbox } from "./lib/tiles.js";
 
 type CliOptions = {
@@ -49,14 +49,14 @@ function parseArgs(args: string[]): CliOptions {
 }
 
 function tileUrl(z: number, x: number, y: number) {
-  return SUBREGION_REMOTE_TILE_TEMPLATE
+  return WINE_REGION_REMOTE_TILE_TEMPLATE
     .replace("{z}", String(z))
     .replace("{y}", String(y))
     .replace("{x}", String(x));
 }
 
 async function loadSubregionTiles(zoom: number): Promise<Tile[]> {
-  const raw = await readFile(path.resolve("src", "data", "france-wine-subregions.geojson"), "utf8");
+  const raw = await readFile(path.resolve("src", "data", "wine-subregions.geojson"), "utf8");
   const fc = JSON.parse(raw) as GeoJSON.FeatureCollection<GeoJSON.Polygon | GeoJSON.MultiPolygon>;
 
   const unique = new Set<string>();
@@ -93,8 +93,8 @@ async function main() {
   console.log(`Downloading ${tasks.length} tiles for wine subregions MID tier at z=${options.zoom}`);
 
   await runPool(tasks, options.concurrency, async ({ z, x, y }) => {
-    const outputDir = path.resolve("public", "tiles", "france-subregions-mid", String(z), String(x));
-    const outputFile = path.join(outputDir, `${y}.${SUBREGION_TILE_FORMAT}`);
+    const outputDir = path.resolve("public", "tiles", "wine-subregions-mid", String(z), String(x));
+    const outputFile = path.join(outputDir, `${y}.${WINE_REGION_TILE_FORMAT}`);
 
     if (!options.overwrite && (await fileExists(outputFile))) {
       skipped += 1;

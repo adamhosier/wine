@@ -6,9 +6,8 @@ Static React + MapLibre app that renders NASA GIBS cloudless imagery with region
 - Global wine-region hierarchy (country -> subregion -> detail)
 - Inside active regions: full imagery emphasis
 - Outside active regions: de-emphasized veil + soft edge haze (single-renderer compositing)
-- France high-zoom local tiles from `public/tiles/france/...` with NASA fallback
-- Wine subregion mid-zoom tiles from `public/tiles/france-subregions-mid/...`
-- Wine subregion ultra-high zoom tiles from `public/tiles/france-subregions/...` with local/remote fallback
+- Wine subregion mid-zoom tiles from `public/tiles/wine-subregions-mid/...`
+- Wine subregion ultra-high zoom tiles from `public/tiles/wine-subregions/...` with local/remote fallback
 - GeoJSON datasets are loaded as static assets at runtime (not bundled into the main JS chunk)
 - In-app data source selector:
   - `WSET Level 2` (full hierarchy dataset)
@@ -18,7 +17,6 @@ Static React + MapLibre app that renders NASA GIBS cloudless imagery with region
 
 ```bash
 npm install
-npm run download-tiles
 npm run download-subregion-mid-tiles -- --zoom 9
 npm run download-subregion-mid-tiles -- --zoom 10
 npm run download-subregion-tiles
@@ -48,18 +46,6 @@ Preview:
 ```bash
 npm run preview
 ```
-
-## Download France local tiles
-
-```bash
-npm run download-tiles
-```
-
-Optional flags:
-
-- `--zoom 8` (default from `src/config.ts`)
-- `--concurrency 8`
-- `--overwrite`
 
 ## Download wine subregion ultra-high tiles
 
@@ -100,10 +86,10 @@ Outputs:
 
 ## Build Wine Subregions
 
-Generate `src/data/france-wine-subregions.geojson` from the canonical OSM-based source pipeline:
+Generate `src/data/wine-subregions.geojson` from the canonical OSM-based source pipeline:
 
 ```bash
-npm run build-france-subregions
+npm run build-wine-subregions
 ```
 
 Build detail-level regions (children of subregions):
@@ -129,6 +115,7 @@ npm run validate:data
 
 The repo includes a Pages workflow in `.github/workflows/deploy.yml` that builds and publishes `dist/`.
 It sets `VITE_BASE_PATH` to `/<repo-name>/` during CI so assets resolve correctly on Pages.
+Client-side `/quiz` routing is supported on Pages via `public/404.html`, which redirects unknown paths back to the SPA entry and restores the intended pathname in-app.
 
 ## CI
 

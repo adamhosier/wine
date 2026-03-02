@@ -1,33 +1,27 @@
 import type { StyleSpecification } from "maplibre-gl";
 import {
-  FRANCE_BBOX,
-  LOCAL_TILE_RELATIVE_TEMPLATE,
   NASA_LAYER,
   NASA_TILE_FORMAT,
   NASA_TILE_MATRIX_SET,
   NASA_TIME,
-  SUBREGION_MID_TILE_RELATIVE_TEMPLATE,
-  SUBREGION_REMOTE_TILE_TEMPLATE,
-  SUBREGION_TILE_RELATIVE_TEMPLATE,
-  Z_HI,
+  WINE_REGION_MID_TILE_RELATIVE_TEMPLATE,
+  WINE_REGION_REMOTE_TILE_TEMPLATE,
+  WINE_REGION_TILE_RELATIVE_TEMPLATE,
+  WORLD_BBOX,
   Z_SUBREGION_HI,
   Z_SUBREGION_MID,
 } from "../config";
 
-export function toLocalTileTemplate(basePath: string) {
-  return `${basePath}${LOCAL_TILE_RELATIVE_TEMPLATE}`;
-}
-
 export function toSubregionLocalTileTemplate(basePath: string) {
-  return `${basePath}${SUBREGION_TILE_RELATIVE_TEMPLATE}`;
+  return `${basePath}${WINE_REGION_TILE_RELATIVE_TEMPLATE}`;
 }
 
 export function toSubregionMidLocalTileTemplate(basePath: string) {
-  return `${basePath}${SUBREGION_MID_TILE_RELATIVE_TEMPLATE}`;
+  return `${basePath}${WINE_REGION_MID_TILE_RELATIVE_TEMPLATE}`;
 }
 
 export function toSubregionRemoteTileTemplate() {
-  return SUBREGION_REMOTE_TILE_TEMPLATE;
+  return WINE_REGION_REMOTE_TILE_TEMPLATE;
 }
 
 export function toNasaTileTemplate() {
@@ -35,71 +29,112 @@ export function toNasaTileTemplate() {
 }
 
 export function createMapStyle(
-  localTilesTemplate: string,
   subregionMidTilesTemplate: string,
   subregionTilesTemplate: string,
   options?: {
     includeLocalTiers?: boolean;
-    franceBounds?: [number, number, number, number];
     wineRegionBounds?: [number, number, number, number];
+    wineRegionBoundsByKey?: Array<{
+      key: string;
+      bounds: [number, number, number, number];
+    }>;
   },
 ): StyleSpecification {
   const includeLocalTiers = options?.includeLocalTiers ?? true;
-  const franceBounds = options?.franceBounds ?? FRANCE_BBOX;
-  const wineRegionBounds = options?.wineRegionBounds ?? FRANCE_BBOX;
+  const wineRegionBounds = options?.wineRegionBounds ?? WORLD_BBOX;
+  const wineRegionBoundsByKey =
+    options?.wineRegionBoundsByKey?.length
+      ? options.wineRegionBoundsByKey
+      : [{ key: "default", bounds: wineRegionBounds }];
 
   const layers: StyleSpecification["layers"] = [{ id: "nasa-base", type: "raster", source: "nasa" }];
   if (includeLocalTiers) {
-    layers.push(
-      {
-        id: "france-local",
-        type: "raster",
-        source: "france_local",
-        minzoom: Z_HI,
-        paint: {
-          "raster-fade-duration": 0,
+    for (const { key } of wineRegionBoundsByKey) {
+      const suffix = key.toLowerCase();
+      layers.push(
+        {
+          id: `wine-subregion-mid-remote-${suffix}`,
+          type: "raster",
+          source: `wine_subregion_mid_remote_${suffix}`,
+          minzoom: Z_SUBREGION_MID,
+          maxzoom: Z_SUBREGION_HI,
+          paint: {
+            "raster-fade-duration": 0,
+          },
         },
-      },
-      {
-        id: "france-subregion-mid-remote",
-        type: "raster",
-        source: "france_subregion_mid_remote",
-        minzoom: Z_SUBREGION_MID,
-        maxzoom: Z_SUBREGION_HI,
-        paint: {
-          "raster-fade-duration": 0,
+        {
+          id: `wine-subregion-mid-local-${suffix}`,
+          type: "raster",
+          source: `wine_subregion_mid_cache_${suffix}`,
+          minzoom: Z_SUBREGION_MID,
+          maxzoom: Z_SUBREGION_HI,
+          paint: {
+            "raster-fade-duration": 0,
+          },
         },
-      },
-      {
-        id: "france-subregion-mid-local",
-        type: "raster",
-        source: "france_subregion_mid_cache",
-        minzoom: Z_SUBREGION_MID,
-        maxzoom: Z_SUBREGION_HI,
-        paint: {
-          "raster-fade-duration": 0,
+        {
+          id: `wine-subregion-remote-${suffix}`,
+          type: "raster",
+          source: `wine_subregion_local_remote_${suffix}`,
+          minzoom: Z_SUBREGION_HI,
+          paint: {
+            "raster-fade-duration": 0,
+          },
         },
-      },
-      {
-        id: "france-subregion-remote",
-        type: "raster",
-        source: "france_subregion_local_remote",
-        minzoom: Z_SUBREGION_HI,
-        paint: {
-          "raster-fade-duration": 0,
+        {
+          id: `wine-subregion-local-${suffix}`,
+          type: "raster",
+          source: `wine_subregion_local_cache_${suffix}`,
+          minzoom: Z_SUBREGION_HI,
+          paint: {
+            "raster-fade-duration": 0,
+          },
         },
-      },
-      {
-        id: "france-subregion-local",
-        type: "raster",
-        source: "france_subregion_local_cache",
-        minzoom: Z_SUBREGION_HI,
-        paint: {
-          "raster-fade-duration": 0,
-        },
-      },
-    );
+      );
+    }
   }
+
+  const regionalSources = wineRegionBoundsByKey.flatMap(({ key, bounds }) => {
+    const suffix = key.toLowerCase();
+    return [
+      [
+        `wine_subregion_local_cache_${suffix}`,
+        {
+          type: "raster",
+          tiles: [subregionTilesTemplate],
+          tileSize: 256,
+          bounds,
+        },
+      ],
+      [
+        `wine_subregion_local_remote_${suffix}`,
+        {
+          type: "raster",
+          tiles: [toSubregionRemoteTileTemplate()],
+          tileSize: 256,
+          bounds,
+        },
+      ],
+      [
+        `wine_subregion_mid_cache_${suffix}`,
+        {
+          type: "raster",
+          tiles: [subregionMidTilesTemplate],
+          tileSize: 256,
+          bounds,
+        },
+      ],
+      [
+        `wine_subregion_mid_remote_${suffix}`,
+        {
+          type: "raster",
+          tiles: [toSubregionRemoteTileTemplate()],
+          tileSize: 256,
+          bounds,
+        },
+      ],
+    ] as const;
+  });
 
   return {
     version: 8,
@@ -111,36 +146,7 @@ export function createMapStyle(
         tileSize: 256,
         attribution: "Imagery: NASA GIBS",
       },
-      france_local: {
-        type: "raster",
-        tiles: [localTilesTemplate],
-        tileSize: 256,
-        bounds: franceBounds,
-      },
-      france_subregion_local_cache: {
-        type: "raster",
-        tiles: [subregionTilesTemplate],
-        tileSize: 256,
-        bounds: wineRegionBounds,
-      },
-      france_subregion_local_remote: {
-        type: "raster",
-        tiles: [toSubregionRemoteTileTemplate()],
-        tileSize: 256,
-        bounds: wineRegionBounds,
-      },
-      france_subregion_mid_cache: {
-        type: "raster",
-        tiles: [subregionMidTilesTemplate],
-        tileSize: 256,
-        bounds: wineRegionBounds,
-      },
-      france_subregion_mid_remote: {
-        type: "raster",
-        tiles: [toSubregionRemoteTileTemplate()],
-        tileSize: 256,
-        bounds: wineRegionBounds,
-      },
+      ...Object.fromEntries(regionalSources),
     },
     layers,
   };

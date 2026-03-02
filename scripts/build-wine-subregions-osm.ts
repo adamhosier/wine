@@ -43,7 +43,7 @@ const OSM_SOURCE_LICENSE = "ODbL 1.0";
 const OSM_SOURCE_URL = "https://nominatim.openstreetmap.org/";
 
 const REGIONS_PATH = path.resolve("src", "data", "regions.geojson");
-const OUT_PATH = path.resolve("src", "data", "france-wine-subregions.geojson");
+const OUT_PATH = path.resolve("src", "data", "wine-subregions.geojson");
 
 const SIMPLIFY_TOLERANCE = 0.0022;
 const REQUEST_DELAY_MS = 1200;

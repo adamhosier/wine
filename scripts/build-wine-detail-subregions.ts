@@ -38,8 +38,8 @@ type NominatimResult = {
   type?: string;
 };
 
-const OUT_PATH = path.resolve("src", "data", "burgundy-detail-subregions.geojson");
-const SUBREGIONS_PATH = path.resolve("src", "data", "france-wine-subregions.geojson");
+const OUT_PATH = path.resolve("src", "data", "wine-detail-subregions.geojson");
+const SUBREGIONS_PATH = path.resolve("src", "data", "wine-subregions.geojson");
 
 const OSM_SOURCE_NAME = "OpenStreetMap via Nominatim";
 const OSM_SOURCE_LICENSE = "ODbL 1.0";

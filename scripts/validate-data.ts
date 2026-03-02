@@ -48,9 +48,9 @@ async function main() {
   const issues: ValidationIssue[] = [];
 
   const regions = await readJson<RegionsCollection>("src/data/regions.geojson");
-  const subregions = await readJson<SubregionsCollection>("src/data/france-wine-subregions.geojson");
-  const details = await readJson<DetailsCollection>("src/data/burgundy-detail-subregions.geojson");
-  const waypoints = await readJson<WaypointsCollection>("src/data/burgundy-waypoints.geojson");
+  const subregions = await readJson<SubregionsCollection>("src/data/wine-subregions.geojson");
+  const details = await readJson<DetailsCollection>("src/data/wine-detail-subregions.geojson");
+  const waypoints = await readJson<WaypointsCollection>("src/data/wine-waypoints.geojson");
 
   const regionKeys = new Set<string>();
   for (const [index, feature] of regions.features.entries()) {

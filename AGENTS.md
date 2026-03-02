@@ -25,11 +25,11 @@ Agent work should prioritize:
 ## Data Contracts
 - Top-level regions: `src/data/regions.geojson`
   - each feature must have `properties.iso_a3`
-- Subregions: `src/data/france-wine-subregions.geojson` (legacy filename, global content)
+- Subregions: `src/data/wine-subregions.geojson`
   - each feature must have `properties.slug` and `properties.parent_iso_a3`
-- Detail regions: `src/data/burgundy-detail-subregions.geojson` (legacy filename, multi-parent content)
+- Detail regions: `src/data/wine-detail-subregions.geojson`
   - each feature must have `properties.slug` and `properties.parent_slug`
-- Explicit waypoints: `src/data/burgundy-waypoints.geojson`
+- Explicit waypoints: `src/data/wine-waypoints.geojson`
   - `properties.parent_node_id` should be `region:*`, `subregion:*`, or `detail:*`
 - Leaf grape profiles: `src/data/leaf-grape-profiles.ts`
   - keyed by leaf `node_id`
@@ -68,7 +68,6 @@ npm run refresh-borders
 ```
 - Fetch imagery tiles:
 ```bash
-npm run download-tiles
 npm run download-subregion-mid-tiles -- --zoom 9
 npm run download-subregion-tiles
 ```

@@ -11,23 +11,22 @@ export function describeTileSource(
   zoom: number,
   centerLon: number,
   centerLat: number,
-  franceBounds: [number, number, number, number],
+  rootRegionBounds: Array<[number, number, number, number]>,
   subregionBounds: Array<[number, number, number, number]>,
-  zHi: number,
   zSubregionMid: number,
   zSubregionHi: number,
 ): string {
-  const inFrance = inBbox(centerLon, centerLat, franceBounds);
+  const inRootRegion = rootRegionBounds.some((bbox) => inBbox(centerLon, centerLat, bbox));
   const inWineSubregion = subregionBounds.some((bbox) => inBbox(centerLon, centerLat, bbox));
 
   if (zoom >= zSubregionHi && inWineSubregion) {
-    return "Local Subregion Ultra + Mid + France + NASA fallback";
+    return "Local Wine Region Ultra + Mid + NASA fallback";
   }
   if (zoom >= zSubregionMid && inWineSubregion) {
-    return "Local Subregion Mid + France + NASA fallback";
+    return "Local Wine Region Mid + NASA fallback";
   }
-  if (zoom >= zHi && inFrance) {
-    return "Local France + NASA fallback";
+  if (inRootRegion) {
+    return "NASA (Root Region Context)";
   }
   return "NASA";
 }
