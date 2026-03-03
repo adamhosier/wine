@@ -166,7 +166,7 @@ Static GitHub Pages app: slippy world map with NASA cloudless imagery, region ov
   - box content includes grape composition percentages
 - Quiz page (`/quiz`):
   - separate page with dataset selector (`WSET Level 2`, `Depth Demo (UK)`)
-  - GitHub Pages deep-linking to `/quiz` must work via SPA fallback restoration from `404.html`
+  - GitHub Pages deep-linking to `/quiz` must work via a real build-time `/quiz/index.html` entry
   - visual layout uses a dedicated quiz card with:
     - header + subtitle + back link
     - quiz toolbar with dataset control and score chips

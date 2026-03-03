@@ -115,7 +115,7 @@ npm run validate:data
 
 The repo includes a Pages workflow in `.github/workflows/deploy.yml` that builds and publishes `dist/`.
 It sets `VITE_BASE_PATH` to `/<repo-name>/` during CI so assets resolve correctly on Pages.
-Client-side `/quiz` routing is supported on Pages via `public/404.html`, which redirects unknown paths back to the SPA entry and restores the intended pathname in-app.
+GitHub Pages serves `/quiz` from a real static entry generated at build time (`dist/quiz/index.html`), while the app still uses base-aware route helpers for navigation.
 
 ## CI
 
